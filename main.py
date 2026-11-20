@@ -47,7 +47,13 @@ def run() -> int:
             break
 
         try:
-            logger.info("İşleniyor: [%s] %s", item.source, item.title)
+            logger.info(
+                "İşleniyor (puan=%.1f | %s): [%s] %s",
+                item.engagement_score,
+                item.category,
+                item.source,
+                item.title,
+            )
             enriched = enrich_news_item(item)
 
             # Yönlendirme sonrası gerçek URL de daha önce paylaşılmış olabilir
