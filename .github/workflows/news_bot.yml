@@ -1,0 +1,67 @@
+name: X Gündem Haber Botu
+
+on:
+  schedule:
+    # Her 2 saatte bir çalışır (günde 12 paylaşım -> X Free Tier limitlerine güvenli şekilde uyar)
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Test modu (true = X'e paylaşmaz, sadece logda gösterir)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: write
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Depoyu indir
+        uses: actions/checkout@v4
+
+      - name: Python 3.12 kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Türkçe karakter destekli sistem fontlarını kur
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-dejavu-core
+
+      - name: Python bağımlılıklarını kur
+        run: pip install -r requirements.txt
+
+      - name: Haber botunu çalıştır
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: "gemini-4-hydrogen"
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          MAX_POSTS_PER_RUN: "1"
+          INCLUDE_SOURCE_LINK: "false"
+          BRAND_NAME: "HABER EXE"
+        run: python main.py
+
+      - name: Paylaşılan haber geçmişini kaydet
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/posted_news.json
+          if git diff --staged --quiet; then
+            echo "Değişiklik yok, commit atlanıyor."
+          else
+            git commit -m "chore: paylaşılan haber geçmişini güncelle [skip ci]"
+            git push
+          fi
