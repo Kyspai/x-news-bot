@@ -11,7 +11,14 @@ import feedparser
 import requests
 from bs4 import BeautifulSoup
 
-from config import HTTP_TIMEOUT, RSS_FEEDS, USER_AGENT
+from config import (
+    HIGH_ENGAGEMENT_KEYWORDS,
+    HTTP_TIMEOUT,
+    LOW_ENGAGEMENT_KEYWORDS,
+    RSS_FEEDS,
+    USER_AGENT,
+)
+from src.storage import tokenize_title
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +28,13 @@ class NewsItem:
     title: str
     url: str
     source: str
+    category: str = "gundem"
     summary: str = ""
     published_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     image_url: Optional[str] = None
     video_url: Optional[str] = None
     article_text: str = ""
+    engagement_score: float = 0.0
 
 
 def _clean_html(raw: str) -> str:
@@ -93,13 +102,77 @@ def _extract_rss_media(entry) -> tuple[Optional[str], Optional[str]]:
     return image_url, video_url
 
 
+def _tr_lower(text: str) -> str:
+    return text.replace("İ", "i").replace("I", "ı").lower()
+
+
+def _rank_by_engagement(items: list[NewsItem]) -> list[NewsItem]:
+    """
+    Haberleri X etkileşim potansiyeline göre puanlar:
+    - Birden fazla ajansın aynı anda geçtiği gündem haberleri (+6)
+    - Ekonomi/zam/spor/teknoloji/son dakika anahtar kelimeleri (+3)
+    - Güncellik puanı (son 1-6 saat öncelikli)
+    - Hazır görsel/video bonusu (+1.5)
+    - Düşük etkileşimli rutin yerel haber cezası (-4)
+    """
+    now = datetime.now(timezone.utc)
+    token_sets = [tokenize_title(it.title) for it in items]
+
+    for idx, item in enumerate(items):
+        score = 0.0
+        haystack = _tr_lower(f"{item.title} {item.summary}")
+
+        # 1. Güncellik puanı (max +8, 12 saat sonra 0)
+        age_hours = max(0.0, (now - item.published_at).total_seconds() / 3600.0)
+        score += max(0.0, 8.0 - (age_hours * 0.7))
+
+        # 2. Yüksek etkileşimli kategori & anahtar kelime bonusu
+        if item.category in ("ekonomi", "spor", "teknoloji"):
+            score += 2.0
+
+        kw_hits = sum(1 for kw in HIGH_ENGAGEMENT_KEYWORDS if kw in haystack)
+        score += min(kw_hits * 3.0, 12.0)
+
+        # 3. Çoklu kaynak trend bonusu (en az 2 farklı ajans aynı konuyu yazıyorsa)
+        my_tokens = token_sets[idx]
+        if my_tokens:
+            matching_sources = {item.source}
+            for j, other in enumerate(items):
+                if j == idx or other.source in matching_sources:
+                    continue
+                other_tokens = token_sets[j]
+                if not other_tokens:
+                    continue
+                union = my_tokens | other_tokens
+                if union and (len(my_tokens & other_tokens) / len(union)) >= 0.35:
+                    matching_sources.add(other.source)
+            if len(matching_sources) >= 2:
+                score += (len(matching_sources) - 1) * 6.0
+
+        # 4. Medya bonusu
+        if item.video_url:
+            score += 2.5
+        elif item.image_url:
+            score += 1.5
+
+        # 5. Düşük etkileşim cezası
+        if any(kw in haystack for kw in LOW_ENGAGEMENT_KEYWORDS):
+            score -= 4.0
+
+        item.engagement_score = round(score, 2)
+
+    items.sort(key=lambda x: (x.engagement_score, x.published_at), reverse=True)
+    return items
+
+
 def fetch_trending_news(limit_per_feed: int = 8) -> list[NewsItem]:
-    """Tanımlı Türkiye gündem RSS kaynaklarından en güncel haberleri çeker."""
+    """Tanımlı Türkiye gündem RSS kaynaklarından en güncel haberleri çeker ve etkileşime göre sıralar."""
     items: list[NewsItem] = []
     headers = {"User-Agent": USER_AGENT}
 
     for feed_cfg in RSS_FEEDS:
         name = feed_cfg["name"]
+        category = feed_cfg.get("category", "gundem")
         url = feed_cfg["url"]
         try:
             resp = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT)
@@ -130,6 +203,7 @@ def fetch_trending_news(limit_per_feed: int = 8) -> list[NewsItem]:
                     title=title,
                     url=link,
                     source=source_name,
+                    category=category,
                     summary=summary,
                     published_at=_parse_date(entry),
                     image_url=image_url,
@@ -137,9 +211,7 @@ def fetch_trending_news(limit_per_feed: int = 8) -> list[NewsItem]:
                 )
             )
 
-    # En yeni haberler başa gelsin
-    items.sort(key=lambda x: x.published_at, reverse=True)
-    return items
+    return _rank_by_engagement(items)
 
 
 def enrich_news_item(item: NewsItem) -> NewsItem:
