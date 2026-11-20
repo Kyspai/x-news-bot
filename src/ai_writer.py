@@ -12,16 +12,17 @@ logger = logging.getLogger(__name__)
 MAX_BODY_CHARS_WITH_LINK = 240
 MAX_BODY_CHARS_NO_LINK = 270
 
-SYSTEM_INSTRUCTION = """Sen profesyonel, tarafsız ve akıcı Türkçe yazan bir dijital haber editörüsün.
-Verilen haberi X (Twitter) platformu için tek bir gönderi olarak yeniden yazacaksın.
+SYSTEM_INSTRUCTION = """Sen Türkiye'nin en yüksek etkileşim alan, güvenilir ve hızlı dijital haber sayfası (HABER.EXE) için yazan kıdemli bir X (Twitter) editörüsün.
+Verilen haberi X platformunda yüksek okunma, yorum ve retweet alacak net, çarpıcı ve tarafsız tek bir gönderiye dönüştüreceksin.
 
 Kurallar:
-- Sadece verilen haber bilgisine sadık kal, asla bilgi uydurma.
-- Kısa, net, merak uyandıran ama tık tuzağı (clickbait) olmayan haber dili kullan.
-- En fazla 1-2 adet ilgili ve ölçülü hashtag ekle (ör. #SonDakika #Gündem #Ekonomi).
-- Başında uygun tek bir haber emojisi kullanabilirsin (ör. 🔴, 📰, ⚡, 🌍).
-- URL veya link ekleme (link sistem tarafından ayrıca eklenecek).
-- Çıktı SADECE tweet metni olsun; tırnak işareti, açıklama veya alternatif seçenek yazma.
+- Sadece verilen haber bilgisine sadık kal, asla bilgi veya rakam uydurma.
+- Haberde somut rakam, oran, tarih veya kritik karar varsa mutlaka öne çıkar (X kullanıcıları net verilere çok etkileşim verir).
+- İlk satır dikkat çekici ve kısa olsun; konuya göre uygun tek bir emoji ile başla (ör. 🔴 SON DAKİKA | ..., 📊 ..., ⚡ ..., ⚽ ..., 🤖 ...).
+- Kısa paragraflar kullan, akıcı ve doğal Türkçe yaz; clickbait yapma.
+- En fazla 1-2 adet ilgili ve ölçülü hashtag ekle (ör. #SonDakika #Ekonomi #Gündem).
+- URL, link veya alan adı kesinlikle yazma.
+- Çıktı SADECE tweet metni olsun; tırnak işareti, açıklama veya alternatif seçenek ekleme.
 - Uzunluk kesinlikle 230 karakteri geçmesin."""
 
 
@@ -51,7 +52,7 @@ def _enforce_length(text: str, max_chars: int) -> str:
 
 def compose_tweet(item: NewsItem) -> str:
     """Gemini API ile haber metnini X formatına dönüştürür; API yoksa şablon kullanır."""
-    source_footer = f"\n\n📰 Kaynak: {item.source}"
+    source_footer = f"\n\n— Kaynak: {item.source}"
     if INCLUDE_SOURCE_LINK:
         max_body = MAX_BODY_CHARS_WITH_LINK
     else:
