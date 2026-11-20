@@ -31,13 +31,13 @@ class XPublisher:
                 X_ACCESS_TOKEN,
                 X_ACCESS_TOKEN_SECRET,
             )
-            self._api_v1 = tweepy.API(auth, wait_on_rate_limit=True)
+            self._api_v1 = tweepy.API(auth, wait_on_rate_limit=False)
             self._client_v2 = tweepy.Client(
                 consumer_key=X_API_KEY,
                 consumer_secret=X_API_SECRET,
                 access_token=X_ACCESS_TOKEN,
                 access_token_secret=X_ACCESS_TOKEN_SECRET,
-                wait_on_rate_limit=True,
+                wait_on_rate_limit=False,
             )
 
     @staticmethod
