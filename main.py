@@ -2,6 +2,8 @@ import logging
 import shutil
 import sys
 
+import tweepy
+
 from config import DRY_RUN, MAX_POSTS_PER_RUN, TMP_MEDIA_DIR
 from src.ai_writer import compose_tweet
 from src.media_handler import prepare_media
@@ -63,6 +65,11 @@ def run() -> int:
                 store.save()
 
             posted_count += 1
+        except tweepy.TweepyException as exc:
+            logger.error("X API hatası nedeniyle çalışma durduruluyor: %s", exc)
+            if TMP_MEDIA_DIR.exists():
+                shutil.rmtree(TMP_MEDIA_DIR, ignore_errors=True)
+            return 1
         except Exception as exc:
             logger.exception("Haber işlenirken hata oluştu: %s", exc)
 
