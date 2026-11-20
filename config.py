@@ -11,29 +11,68 @@ PREVIEW_DIR = BASE_DIR / "output_preview"
 
 STATE_FILE = DATA_DIR / "posted_news.json"
 
-# Türkiye Genel Gündem RSS Kaynakları
+# Türkiye Yüksek Etkileşimli Gündem RSS Kaynakları (Son Dakika, Ekonomi, Spor, Teknoloji)
 RSS_FEEDS = [
     {
         "name": "TRT Haber",
+        "category": "gundem",
         "url": "https://www.trthaber.com/sondakika.rss",
     },
     {
         "name": "NTV",
+        "category": "gundem",
         "url": "https://www.ntv.com.tr/gundem.rss",
     },
     {
+        "name": "NTV Ekonomi",
+        "category": "ekonomi",
+        "url": "https://www.ntv.com.tr/ekonomi.rss",
+    },
+    {
+        "name": "NTV Spor",
+        "category": "spor",
+        "url": "https://www.ntv.com.tr/spor.rss",
+    },
+    {
+        "name": "NTV Teknoloji",
+        "category": "teknoloji",
+        "url": "https://www.ntv.com.tr/teknoloji.rss",
+    },
+    {
         "name": "BBC Türkçe",
+        "category": "gundem",
         "url": "https://feeds.bbci.co.uk/turkce/rss.xml",
     },
     {
         "name": "Anadolu Ajansı",
+        "category": "gundem",
         "url": "https://www.aa.com.tr/tr/rss/default?cat=guncel",
     },
     {
         "name": "Google News TR",
+        "category": "gundem",
         "url": "https://news.google.com/rss?hl=tr&gl=TR&ceid=TR:tr",
     },
 ]
+
+# X'te yüksek etkileşim (RT, yorum, alıntı) alan gündem anahtar kelimeleri
+HIGH_ENGAGEMENT_KEYWORDS = {
+    "son dakika", "zam", "indirim", "faiz", "merkez bankası", "dolar", "euro",
+    "altın", "gram altın", "borsa", "enflasyon", "asgari ücret", "emekli",
+    "memur", "maaş", "vergi", "kredi", "benzin", "motorin", "akaryakıt",
+    "elektrik", "doğalgaz", "resmi gazete", "yürürlüğe", "yasak", "ceza",
+    "karar", "açıklama", "deprem", "uyarı", "meteoroloji", "tatil",
+    "fenerbahçe", "galatasaray", "beşiktaş", "trabzonspor", "milli takım",
+    "süper lig", "şampiyonlar ligi", "transfer", "derbi",
+    "yapay zeka", "openai", "google", "apple", "iphone", "tesla", "elon musk",
+    "instagram", "whatsapp", "tiktok", "youtube", "bitcoin", "kripto",
+}
+
+# Düşük etkileşimli rutin/yerel haberleri geriye atmak için anahtar kelimeler
+LOW_ENGAGEMENT_KEYWORDS = {
+    "ilçe belediye", "muhtar", "fuarı açıldı", "sergisi açıldı",
+    "kermes", "kursiyer", "törenle açıldı", "plaket", "ziyaret etti",
+}
 
 # API Anahtarları
 X_API_KEY = os.getenv("X_API_KEY", "").strip()
