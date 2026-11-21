@@ -92,6 +92,12 @@ INCLUDE_SOURCE_LINK = os.getenv("INCLUDE_SOURCE_LINK", "false").strip().lower() 
     "yes",
     "evet",
 }
+INCLUDE_MEDIA = os.getenv("INCLUDE_MEDIA", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "evet",
+}
 BRAND_NAME = os.getenv("BRAND_NAME", "GÜNDEM ÖZETİ").strip()
 
 # Medya ve ağ limitleri
