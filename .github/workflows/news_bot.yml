@@ -51,6 +51,7 @@ jobs:
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
           MAX_POSTS_PER_RUN: "1"
           INCLUDE_SOURCE_LINK: "false"
+          INCLUDE_MEDIA: "false"
           BRAND_NAME: "HABER EXE"
         run: python main.py
 
