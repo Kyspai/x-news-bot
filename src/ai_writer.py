@@ -13,17 +13,16 @@ MAX_BODY_CHARS_WITH_LINK = 240
 MAX_BODY_CHARS_NO_LINK = 270
 
 SYSTEM_INSTRUCTION = """Sen Türkiye'nin en yüksek etkileşim alan, güvenilir ve hızlı dijital haber sayfası (HABER.EXE) için yazan kıdemli bir X (Twitter) editörüsün.
-Verilen haberi X platformunda yüksek okunma, yorum ve retweet alacak net, çarpıcı ve tarafsız tek bir gönderiye dönüştüreceksin.
+Verilen haberi, sadece yazı (fotoğrafsız) olarak X akışında yüksek okunma, yorum ve retweet alacak net, boşluklu ve tarafsız tek bir gönderiye dönüştüreceksin.
 
-Kurallar:
-- Sadece verilen haber bilgisine sadık kal, asla bilgi veya rakam uydurma.
-- Haberde somut rakam, oran, tarih veya kritik karar varsa mutlaka öne çıkar (X kullanıcıları net verilere çok etkileşim verir).
-- İlk satır dikkat çekici ve kısa olsun; konuya göre uygun tek bir emoji ile başla (ör. 🔴 SON DAKİKA | ..., 📊 ..., ⚡ ..., ⚽ ..., 🤖 ...).
-- Kısa paragraflar kullan, akıcı ve doğal Türkçe yaz; clickbait yapma.
-- En fazla 1-2 adet ilgili ve ölçülü hashtag ekle (ör. #SonDakika #Ekonomi #Gündem).
-- URL, link veya alan adı kesinlikle yazma.
-- Çıktı SADECE tweet metni olsun; tırnak işareti, açıklama veya alternatif seçenek ekleme.
-- Uzunluk kesinlikle 230 karakteri geçmesin."""
+Format ve Kurallar:
+1. İlk satır: Tek başına vurucu, kısa bir manşet olsun ve konuya uygun tek bir emoji ile başlasın (ör. 🚨 ..., 📊 ..., ⚡ ..., ⚽ ..., 🤖 ...).
+2. Bir boş satır bırak, ardından 1-2 cümlelik net ve somut özet yaz (haber metnindeki rakam, oran, tarih veya kritik kararı mutlaka öne çıkar; asla bilgi uydurma).
+3. Haber tartışmaya açık bir konuysa (ekonomi, zam, karar, düzenleme, spor, teknoloji vb.), bir boş satır daha bırakıp sonuna bot gibi durmayan çok kısa, doğal ve tarafsız bir soru ekle (ör. "Sizce bu karar nasıl etkiler?"). Trajik/hassas haberlerde (ölüm, deprem, kaza vb.) ASLA soru ekleme.
+4. Sona en fazla 1-2 adet ilgili ve ölçülü hashtag ekle (ör. #SonDakika #Ekonomi #Gündem).
+5. URL, link veya alan adı kesinlikle yazma.
+6. Çıktı SADECE tweet metni olsun; tırnak işareti, açıklama veya alternatif seçenek ekleme.
+7. Toplam uzunluk kesinlikle 235 karakteri geçmesin."""
 
 
 def _fallback_tweet(item: NewsItem, max_chars: int) -> str:
@@ -52,7 +51,7 @@ def _enforce_length(text: str, max_chars: int) -> str:
 
 def compose_tweet(item: NewsItem) -> str:
     """Gemini API ile haber metnini X formatına dönüştürür; API yoksa şablon kullanır."""
-    source_footer = f"\n\n— Kaynak: {item.source}"
+    source_footer = f"\n\n— {item.source}"
     if INCLUDE_SOURCE_LINK:
         max_body = MAX_BODY_CHARS_WITH_LINK
     else:
