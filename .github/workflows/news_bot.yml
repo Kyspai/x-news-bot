@@ -2,8 +2,8 @@ name: X Gündem Haber Botu
 
 on:
   schedule:
-    # Her 2 saatte bir çalışır (günde 12 paylaşım -> X Free Tier limitlerine güvenli şekilde uyar)
-    - cron: "0 */2 * * *"
+    # Günde tam 10 paylaşım (TR saatiyle 08:00, 10:00, 12:00, 14:00, 16:00, 18:00, 19:00, 21:00, 22:00, 00:00)
+    - cron: "0 5,7,9,11,13,15,16,18,19,21 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
