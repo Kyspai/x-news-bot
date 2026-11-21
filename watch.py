@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 from config import (
     DRY_RUN,
+    INCLUDE_MEDIA,
     TMP_MEDIA_DIR,
     WATCH_INTERVAL_SECONDS,
     WATCH_MAX_AGE_MINUTES,
@@ -107,7 +108,7 @@ def watch_loop() -> int:
 
                     if not store.is_duplicate(enriched.url, enriched.title):
                         tweet_text = compose_tweet(enriched)
-                        media = prepare_media(enriched)
+                        media = prepare_media(enriched) if INCLUDE_MEDIA else None
                         publisher.publish(tweet_text, media=media)
 
                         if not DRY_RUN:
