@@ -15,6 +15,7 @@ from config import (
     HIGH_ENGAGEMENT_KEYWORDS,
     HTTP_TIMEOUT,
     LOW_ENGAGEMENT_KEYWORDS,
+    MAX_NEWS_AGE_HOURS,
     RSS_FEEDS,
     USER_AGENT,
 )
@@ -106,13 +107,16 @@ def _tr_lower(text: str) -> str:
     return text.replace("İ", "i").replace("I", "ı").lower()
 
 
-def _rank_by_engagement(items: list[NewsItem]) -> list[NewsItem]:
+def _rank_by_engagement(
+    items: list[NewsItem],
+    last_category: Optional[str] = None,
+) -> list[NewsItem]:
     """
     Haberleri X etkileşim potansiyeline göre puanlar:
     - Birden fazla ajansın aynı anda geçtiği gündem haberleri (+6)
     - Ekonomi/zam/spor/teknoloji/son dakika anahtar kelimeleri (+3)
     - Güncellik puanı (son 1-6 saat öncelikli)
-    - Hazır görsel/video bonusu (+1.5)
+    - Kategori çeşitliliği (son paylaşılan kategoriye -5, farklı kategoriye +2)
     - Düşük etkileşimli rutin yerel haber cezası (-4)
     """
     now = datetime.now(timezone.utc)
@@ -133,7 +137,14 @@ def _rank_by_engagement(items: list[NewsItem]) -> list[NewsItem]:
         kw_hits = sum(1 for kw in HIGH_ENGAGEMENT_KEYWORDS if kw in haystack)
         score += min(kw_hits * 3.0, 12.0)
 
-        # 3. Çoklu kaynak trend bonusu (en az 2 farklı ajans aynı konuyu yazıyorsa)
+        # 3. Kategori çeşitliliği (üst üste aynı kategori paylaşılmasın)
+        if last_category:
+            if item.category == last_category:
+                score -= 5.0
+            else:
+                score += 2.0
+
+        # 4. Çoklu kaynak trend bonusu (en az 2 farklı ajans aynı konuyu yazıyorsa)
         my_tokens = token_sets[idx]
         if my_tokens:
             matching_sources = {item.source}
@@ -149,13 +160,13 @@ def _rank_by_engagement(items: list[NewsItem]) -> list[NewsItem]:
             if len(matching_sources) >= 2:
                 score += (len(matching_sources) - 1) * 6.0
 
-        # 4. Medya bonusu
+        # 5. Medya bonusu
         if item.video_url:
             score += 2.5
         elif item.image_url:
             score += 1.5
 
-        # 5. Düşük etkileşim cezası
+        # 6. Düşük etkileşim cezası
         if any(kw in haystack for kw in LOW_ENGAGEMENT_KEYWORDS):
             score -= 4.0
 
@@ -165,10 +176,15 @@ def _rank_by_engagement(items: list[NewsItem]) -> list[NewsItem]:
     return items
 
 
-def fetch_trending_news(limit_per_feed: int = 8) -> list[NewsItem]:
-    """Tanımlı Türkiye gündem RSS kaynaklarından en güncel haberleri çeker ve etkileşime göre sıralar."""
+def fetch_trending_news(
+    limit_per_feed: int = 8,
+    last_category: Optional[str] = None,
+    max_age_hours: int = MAX_NEWS_AGE_HOURS,
+) -> list[NewsItem]:
+    """Tanımlı Türkiye gündem RSS kaynaklarından son X saatteki haberleri çeker ve sıralar."""
     items: list[NewsItem] = []
     headers = {"User-Agent": USER_AGENT}
+    now = datetime.now(timezone.utc)
 
     for feed_cfg in RSS_FEEDS:
         name = feed_cfg["name"]
@@ -211,7 +227,21 @@ def fetch_trending_news(limit_per_feed: int = 8) -> list[NewsItem]:
                 )
             )
 
-    return _rank_by_engagement(items)
+    # Bayat haber filtresi: max_age_hours'tan eski haberleri ele
+    fresh_by_age = [
+        it for it in items
+        if (now - it.published_at).total_seconds() <= max_age_hours * 3600
+    ]
+    filtered = fresh_by_age if fresh_by_age else items
+    if len(filtered) < len(items):
+        logger.info(
+            "Bayat haber filtresi: %d haberden son %d saatteki %d haber seçildi.",
+            len(items),
+            max_age_hours,
+            len(filtered),
+        )
+
+    return _rank_by_engagement(filtered, last_category=last_category)
 
 
 def enrich_news_item(item: NewsItem) -> NewsItem:
