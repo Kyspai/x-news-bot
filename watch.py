@@ -92,7 +92,10 @@ def watch_loop() -> int:
         else:
             try:
                 cutoff = datetime.now(timezone.utc) - timedelta(minutes=WATCH_MAX_AGE_MINUTES)
-                items = fetch_trending_news(limit_per_feed=6)
+                items = fetch_trending_news(
+                    limit_per_feed=6,
+                    last_category=store.get_last_category(),
+                )
                 candidates = [
                     item
                     for item in items
@@ -112,7 +115,7 @@ def watch_loop() -> int:
                         publisher.publish(tweet_text, media=media)
 
                         if not DRY_RUN:
-                            store.mark_posted(enriched.url, enriched.title)
+                            store.mark_posted(enriched.url, enriched.title, category=enriched.category)
                             store.save()
 
                         posted_at = time.time()
