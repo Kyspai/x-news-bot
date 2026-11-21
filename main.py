@@ -29,7 +29,10 @@ def run() -> int:
     store = PostedNewsStore()
     publisher = XPublisher(dry_run=DRY_RUN)
 
-    news_items = fetch_trending_news(limit_per_feed=8)
+    news_items = fetch_trending_news(
+        limit_per_feed=8,
+        last_category=store.get_last_category(),
+    )
     logger.info("Toplam %d güncel haber toplandı.", len(news_items))
 
     fresh_items = [
@@ -67,7 +70,7 @@ def run() -> int:
             publisher.publish(tweet_text, media=media)
 
             if not DRY_RUN:
-                store.mark_posted(enriched.url, enriched.title)
+                store.mark_posted(enriched.url, enriched.title, category=enriched.category)
                 store.save()
 
             posted_count += 1
