@@ -105,6 +105,7 @@ HTTP_TIMEOUT = 15
 MAX_IMAGE_BYTES = 5 * 1024 * 1024      # 5 MB (X standart görsel limiti)
 MAX_VIDEO_BYTES = 50 * 1024 * 1024     # 50 MB (GitHub Actions + X güvenli limit)
 MAX_STORED_HISTORY = 500
+MAX_NEWS_AGE_HOURS = max(1, int(os.getenv("MAX_NEWS_AGE_HOURS", "12")))
 
 # Anlık takip modu (watch.py) ayarları
 WATCH_INTERVAL_SECONDS = max(60, int(os.getenv("WATCH_INTERVAL_SECONDS", "120")))
