@@ -2,8 +2,11 @@ name: X Gündem Haber Botu
 
 on:
   schedule:
-    # Günde tam 10 paylaşım (TR saatiyle 08:00, 10:00, 12:00, 14:00, 16:00, 18:00, 19:00, 21:00, 22:00, 00:00)
-    - cron: "0 5,7,9,11,13,15,16,18,19,21 * * *"
+    # Günde tam 22 paylaşım (30 günde 660 haber -> ~$9.90/ay, $9.985 bakiye tam 1 ay yeter)
+    # 1) TR saatiyle 07:00 - 23:00 arası her saat başı (17 paylaşım)
+    - cron: "0 4-20 * * *"
+    # 2) TR prime time saatlerinde buçuklarda 5 ek paylaşım (12:30, 17:30, 19:30, 21:30, 23:30)
+    - cron: "30 9,14,16,18,20 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
