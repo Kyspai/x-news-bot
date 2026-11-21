@@ -4,7 +4,7 @@ import sys
 
 import tweepy
 
-from config import DRY_RUN, MAX_POSTS_PER_RUN, TMP_MEDIA_DIR
+from config import DRY_RUN, INCLUDE_MEDIA, MAX_POSTS_PER_RUN, TMP_MEDIA_DIR
 from src.ai_writer import compose_tweet
 from src.media_handler import prepare_media
 from src.news_fetcher import enrich_news_item, fetch_trending_news
@@ -62,7 +62,7 @@ def run() -> int:
                 continue
 
             tweet_text = compose_tweet(enriched)
-            media = prepare_media(enriched)
+            media = prepare_media(enriched) if INCLUDE_MEDIA else None
 
             publisher.publish(tweet_text, media=media)
 
