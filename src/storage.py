@@ -32,6 +32,7 @@ class PostedNewsStore:
         self.path = path
         self.posted_urls: list[str] = []
         self.posted_titles: list[str] = []
+        self.last_categories: list[str] = []
         self._load()
 
     def _load(self) -> None:
@@ -41,9 +42,14 @@ class PostedNewsStore:
             data = json.loads(self.path.read_text(encoding="utf-8"))
             self.posted_urls = list(data.get("posted_urls", []))
             self.posted_titles = list(data.get("posted_titles", []))
+            self.last_categories = list(data.get("last_categories", []))
         except (json.JSONDecodeError, OSError):
             self.posted_urls = []
             self.posted_titles = []
+            self.last_categories = []
+
+    def get_last_category(self) -> str | None:
+        return self.last_categories[-1] if self.last_categories else None
 
     def is_duplicate(self, url: str, title: str, similarity_threshold: float = 0.55) -> bool:
         norm_url = normalize_url(url)
@@ -64,20 +70,23 @@ class PostedNewsStore:
                 return True
         return False
 
-    def mark_posted(self, url: str, title: str) -> None:
+    def mark_posted(self, url: str, title: str, category: str = "gundem") -> None:
         norm_url = normalize_url(url)
         if norm_url not in self.posted_urls:
             self.posted_urls.append(norm_url)
         self.posted_titles.append(title.strip())
+        self.last_categories.append(category)
 
         self.posted_urls = self.posted_urls[-MAX_STORED_HISTORY:]
         self.posted_titles = self.posted_titles[-MAX_STORED_HISTORY:]
+        self.last_categories = self.last_categories[-10:]
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "posted_urls": self.posted_urls,
             "posted_titles": self.posted_titles,
+            "last_categories": self.last_categories,
         }
         self.path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
