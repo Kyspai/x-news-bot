@@ -12,8 +12,10 @@ import requests
 from bs4 import BeautifulSoup
 
 from config import (
+    GOOGLE_TRENDS_TR_RSS,
     HIGH_ENGAGEMENT_KEYWORDS,
     HTTP_TIMEOUT,
+    IGNORED_TREND_KEYWORDS,
     LOW_ENGAGEMENT_KEYWORDS,
     MAX_NEWS_AGE_HOURS,
     RSS_FEEDS,
@@ -107,20 +109,49 @@ def _tr_lower(text: str) -> str:
     return text.replace("İ", "i").replace("I", "ı").lower()
 
 
+def _fetch_serious_trends() -> list[str]:
+    """
+    Google Trends Türkiye RSS'inden anlık aranan konuları çeker;
+    magazin/dizi/loto/burç gibi ciddi haber dışı aramaları tamamen eler.
+    """
+    headers = {"User-Agent": USER_AGENT}
+    try:
+        resp = requests.get(GOOGLE_TRENDS_TR_RSS, headers=headers, timeout=8)
+        resp.raise_for_status()
+        parsed = feedparser.parse(resp.content)
+    except Exception as exc:
+        logger.debug("Google Trends alınamadı (sorun değil, devam ediliyor): %s", exc)
+        return []
+
+    serious_terms: list[str] = []
+    for entry in parsed.entries[:25]:
+        raw = _clean_html(getattr(entry, "title", ""))
+        term = _tr_lower(raw)
+        if len(term) < 4:
+            continue
+        if any(bad in term for bad in IGNORED_TREND_KEYWORDS):
+            continue
+        serious_terms.append(term)
+    return serious_terms
+
+
 def _rank_by_engagement(
     items: list[NewsItem],
     last_category: Optional[str] = None,
+    trend_terms: Optional[list[str]] = None,
 ) -> list[NewsItem]:
     """
     Haberleri X etkileşim potansiyeline göre puanlar:
     - Birden fazla ajansın aynı anda geçtiği gündem haberleri (+6)
+    - Sıkı filtreli Google Trends TR eşleşmesi (+6, sadece ciddi haberlerde)
     - Ekonomi/zam/spor/teknoloji/son dakika anahtar kelimeleri (+3)
     - Güncellik puanı (son 1-6 saat öncelikli)
     - Kategori çeşitliliği (son paylaşılan kategoriye -5, farklı kategoriye +2)
-    - Düşük etkileşimli rutin yerel haber cezası (-4)
+    - Magazin/dizi/rutin yerel haber cezası (-4 / -6)
     """
     now = datetime.now(timezone.utc)
     token_sets = [tokenize_title(it.title) for it in items]
+    active_trends = trend_terms or []
 
     for idx, item in enumerate(items):
         score = 0.0
@@ -137,14 +168,19 @@ def _rank_by_engagement(
         kw_hits = sum(1 for kw in HIGH_ENGAGEMENT_KEYWORDS if kw in haystack)
         score += min(kw_hits * 3.0, 12.0)
 
-        # 3. Kategori çeşitliliği (üst üste aynı kategori paylaşılmasın)
+        # 3. Sıkı filtreli Google Trends TR ciddi haber bonusu (en fazla +6)
+        if active_trends and not any(bad in haystack for bad in IGNORED_TREND_KEYWORDS):
+            if any(t in haystack for t in active_trends):
+                score += 6.0
+
+        # 4. Kategori çeşitliliği (üst üste aynı kategori paylaşılmasın)
         if last_category:
             if item.category == last_category:
                 score -= 5.0
             else:
                 score += 2.0
 
-        # 4. Çoklu kaynak trend bonusu (en az 2 farklı ajans aynı konuyu yazıyorsa)
+        # 5. Çoklu kaynak trend bonusu (en az 2 farklı ajans aynı konuyu yazıyorsa)
         my_tokens = token_sets[idx]
         if my_tokens:
             matching_sources = {item.source}
@@ -160,15 +196,17 @@ def _rank_by_engagement(
             if len(matching_sources) >= 2:
                 score += (len(matching_sources) - 1) * 6.0
 
-        # 5. Medya bonusu
+        # 6. Medya bonusu
         if item.video_url:
             score += 2.5
         elif item.image_url:
             score += 1.5
 
-        # 6. Düşük etkileşim cezası
+        # 7. Düşük etkileşim & magazin/dizi cezası
         if any(kw in haystack for kw in LOW_ENGAGEMENT_KEYWORDS):
             score -= 4.0
+        if any(bad in haystack for bad in IGNORED_TREND_KEYWORDS):
+            score -= 6.0
 
         item.engagement_score = round(score, 2)
 
@@ -241,7 +279,11 @@ def fetch_trending_news(
             len(filtered),
         )
 
-    return _rank_by_engagement(filtered, last_category=last_category)
+    trend_terms = _fetch_serious_trends()
+    if trend_terms:
+        logger.info("Google Trends TR'den %d ciddi trend konusu alındı.", len(trend_terms))
+
+    return _rank_by_engagement(filtered, last_category=last_category, trend_terms=trend_terms)
 
 
 def enrich_news_item(item: NewsItem) -> NewsItem:
