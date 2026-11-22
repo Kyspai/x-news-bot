@@ -2,11 +2,9 @@ name: X Gündem Haber Botu
 
 on:
   schedule:
-    # Günde tam 22 paylaşım (30 günde 660 haber -> ~$9.90/ay, $9.985 bakiye tam 1 ay yeter)
-    # 1) TR saatiyle 07:00 - 23:00 arası her saat başı (17 paylaşım)
-    - cron: "0 4-20 * * *"
-    # 2) TR prime time saatlerinde buçuklarda 5 ek paylaşım (12:30, 17:30, 19:30, 21:30, 23:30)
-    - cron: "30 9,14,16,18,20 * * *"
+    # Günde 8 en yüksek puanlı haber (TR saatiyle 09:00, 11:00, 13:00, 15:00, 17:00, 19:00, 21:00, 23:00)
+    # Kredi koruma modu: ~$0.12/gün (~$3.60/ay) -> mevcut bakiye ~80 gün yeter
+    - cron: "0 6,8,10,12,14,16,18,20 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -54,7 +52,7 @@ jobs:
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
           MAX_POSTS_PER_RUN: "1"
           INCLUDE_SOURCE_LINK: "false"
-          INCLUDE_MEDIA: "false"
+          INCLUDE_MEDIA: "true"
           BRAND_NAME: "HABER EXE"
         run: python main.py
 
