@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 import requests
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from config import (
     BRAND_NAME,
@@ -93,7 +93,94 @@ def _download_video(url: str, output_dir: Path) -> Optional[Path]:
         return None
 
 
-def _download_and_normalize_image(url: str, output_dir: Path) -> Optional[Path]:
+CATEGORY_LABELS = {
+    "gundem": "GÜNDEM",
+    "ekonomi": "EKONOMİ",
+    "spor": "SPOR",
+    "teknoloji": "TEKNOLOJİ",
+}
+
+
+def _apply_news_overlay(img: Image.Image, item: NewsItem) -> Image.Image:
+    """
+    Haber fotoğrafını BPT / HABER.EXE tarzı 1200x800 manşetli görsele dönüştürür:
+    - Fotoğrafı 1200x800 çerçeveye oran bozmadan doldurur
+    - Alt kısma yumuşak koyu gradyan ekler
+    - Sol üste kırmızı HABER.EXE + kategori rozeti koyar
+    - Alt kısma vurucu beyaz manşet ve kaynak imzası yazar
+    """
+    width, height = 1200, 800
+    base = ImageOps.fit(img, (width, height), method=Image.Resampling.LANCZOS).convert("RGBA")
+
+    # Alt yarıya yumuşak siyah-lacivert gradyan
+    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    ov_draw = ImageDraw.Draw(overlay)
+    fade_start = int(height * 0.42)
+    fade_span = height - fade_start
+    for y in range(fade_start, height):
+        progress = (y - fade_start) / float(fade_span)
+        alpha = int(242 * (progress ** 1.35))
+        ov_draw.line([(0, y), (width, y)], fill=(8, 12, 22, alpha))
+
+    # Üst sol köşe için hafif gölge bandı (rozet okunurluğu)
+    for y in range(0, 120):
+        alpha = int(110 * (1.0 - (y / 120.0)))
+        ov_draw.line([(0, y), (width, y)], fill=(8, 12, 22, alpha))
+
+    composed = Image.alpha_composite(base, overlay)
+    draw = ImageDraw.Draw(composed)
+
+    badge_font = _load_font(24, bold=True)
+    cat_font = _load_font(22, bold=True)
+    title_font = _load_font(44, bold=True)
+    source_font = _load_font(22, bold=False)
+
+    # Sol üst HABER.EXE rozeti
+    brand_text = BRAND_NAME.upper()
+    cat_text = CATEGORY_LABELS.get(item.category, "GÜNDEM")
+    draw.rounded_rectangle([(40, 34), (242, 82)], radius=8, fill=(230, 57, 70, 245))
+    draw.ellipse([(56, 51), (70, 65)], fill=(255, 255, 255, 255))
+    draw.text((82, 44), brand_text[:11], font=badge_font, fill=(255, 255, 255, 255))
+
+    # Yanında koyu yarı saydam kategori etiketi
+    draw.rounded_rectangle([(254, 34), (420, 82)], radius=8, fill=(14, 20, 34, 210))
+    draw.text((274, 46), cat_text, font=cat_font, fill=(226, 232, 240, 255))
+
+    # Başlığı 2-3 satıra sar
+    wrapped = textwrap.wrap(item.title.strip(), width=36)[:3]
+    if len(wrapped) == 3 and len(item.title.strip()) > sum(len(l) for l in wrapped) + 3:
+        wrapped[-1] = wrapped[-1].rstrip(".,;:") + "…"
+
+    line_height = 56
+    block_height = len(wrapped) * line_height
+    y_start = height - block_height - 76
+
+    # Başlığın solunda dikey kırmızı vurgu şeridi
+    draw.rounded_rectangle(
+        [(40, y_start + 4), (50, y_start + block_height - 4)],
+        radius=4,
+        fill=(230, 57, 70, 255),
+    )
+
+    # Beyaz manşet satırları (hafif gölgeli)
+    y_cursor = y_start
+    for line in wrapped:
+        draw.text((70, y_cursor + 2), line, font=title_font, fill=(0, 0, 0, 180))
+        draw.text((68, y_cursor), line, font=title_font, fill=(255, 255, 255, 255))
+        y_cursor += line_height
+
+    # Alt kaynak imzası
+    draw.text(
+        (68, height - 48),
+        f"Kaynak: {item.source}  •  @HaberExe",
+        font=source_font,
+        fill=(186, 198, 218, 230),
+    )
+
+    return composed.convert("RGB")
+
+
+def _download_and_normalize_image(url: str, output_dir: Path, item: NewsItem) -> Optional[Path]:
     headers = {"User-Agent": USER_AGENT}
     try:
         resp = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT)
@@ -117,13 +204,10 @@ def _download_and_normalize_image(url: str, output_dir: Path) -> Optional[Path]:
         elif img.mode != "RGB":
             img = img.convert("RGB")
 
-        # X için ideal maksimum genişlik
-        if width > 1600:
-            ratio = 1600 / float(width)
-            img = img.resize((1600, int(height * ratio)), Image.Resampling.LANCZOS)
+        branded = _apply_news_overlay(img, item)
 
         target = output_dir / f"image_{uuid.uuid4().hex[:8]}.jpg"
-        img.save(target, format="JPEG", quality=90, optimize=True)
+        branded.save(target, format="JPEG", quality=92, optimize=True)
         return target
     except Exception as exc:
         logger.warning("Görsel indirilemedi (%s): %s", url, exc)
@@ -193,9 +277,9 @@ def prepare_media(item: NewsItem) -> PreparedMedia:
             return PreparedMedia(path=video_path, media_type="video")
 
     if item.image_url:
-        image_path = _download_and_normalize_image(item.image_url, TMP_MEDIA_DIR)
+        image_path = _download_and_normalize_image(item.image_url, TMP_MEDIA_DIR, item)
         if image_path:
-            logger.info("Orijinal görsel indirildi: %s", image_path.name)
+            logger.info("Manşetli haber görseli hazırlandı: %s", image_path.name)
             return PreparedMedia(path=image_path, media_type="image")
 
     card_path = generate_news_card(item, TMP_MEDIA_DIR)
