@@ -74,6 +74,17 @@ LOW_ENGAGEMENT_KEYWORDS = {
     "kermes", "kursiyer", "törenle açıldı", "plaket", "ziyaret etti",
 }
 
+# Google Trends Türkiye (sadece ciddi haberlere +6 destek puanı vermek için)
+GOOGLE_TRENDS_TR_RSS = "https://trends.google.com/trending/rss?geo=TR"
+
+# Magazin, dizi, loto, burç gibi ciddi haber dışı trendleri tamamen yok say
+IGNORED_TREND_KEYWORDS = {
+    "bölüm", "fragman", "dizi", "izle", "survivor", "masterchef", "müge anlı",
+    "esra erol", "magazin", "burç", "astroloji", "sayısal loto", "şans topu",
+    "süper loto", "on numara", "milli piyango", "kimdir", "kaç yaşında",
+    "nereli", "sevgilisi", "boşandı", "evlendi", "elbise", "kombin",
+}
+
 # API Anahtarları
 X_API_KEY = os.getenv("X_API_KEY", "").strip()
 X_API_SECRET = os.getenv("X_API_SECRET", "").strip()
