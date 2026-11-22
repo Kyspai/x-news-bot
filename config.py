@@ -92,7 +92,7 @@ INCLUDE_SOURCE_LINK = os.getenv("INCLUDE_SOURCE_LINK", "false").strip().lower() 
     "yes",
     "evet",
 }
-INCLUDE_MEDIA = os.getenv("INCLUDE_MEDIA", "false").strip().lower() in {
+INCLUDE_MEDIA = os.getenv("INCLUDE_MEDIA", "true").strip().lower() in {
     "1",
     "true",
     "yes",
