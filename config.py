@@ -11,12 +11,27 @@ PREVIEW_DIR = BASE_DIR / "output_preview"
 
 STATE_FILE = DATA_DIR / "posted_news.json"
 
-# Türkiye Yüksek Etkileşimli Gündem RSS Kaynakları (Son Dakika, Ekonomi, Spor, Teknoloji)
+# Türkiye Yüksek Etkileşimli Gündem RSS Kaynakları (Doğrudan Gerçek Fotoğraflı Kaynaklar)
 RSS_FEEDS = [
     {
         "name": "TRT Haber",
         "category": "gundem",
         "url": "https://www.trthaber.com/sondakika.rss",
+    },
+    {
+        "name": "TRT Ekonomi",
+        "category": "ekonomi",
+        "url": "https://www.trthaber.com/ekonomi_articles.rss",
+    },
+    {
+        "name": "TRT Spor",
+        "category": "spor",
+        "url": "https://www.trthaber.com/spor_articles.rss",
+    },
+    {
+        "name": "TRT Teknoloji",
+        "category": "teknoloji",
+        "url": "https://www.trthaber.com/bilim_teknoloji_articles.rss",
     },
     {
         "name": "NTV",
@@ -39,6 +54,11 @@ RSS_FEEDS = [
         "url": "https://www.ntv.com.tr/teknoloji.rss",
     },
     {
+        "name": "Habertürk",
+        "category": "gundem",
+        "url": "https://www.haberturk.com/rss/kategori/gundem.xml",
+    },
+    {
         "name": "BBC Türkçe",
         "category": "gundem",
         "url": "https://feeds.bbci.co.uk/turkce/rss.xml",
@@ -48,12 +68,16 @@ RSS_FEEDS = [
         "category": "gundem",
         "url": "https://www.aa.com.tr/tr/rss/default?cat=guncel",
     },
-    {
-        "name": "Google News TR",
-        "category": "gundem",
-        "url": "https://news.google.com/rss?hl=tr&gl=TR&ceid=TR:tr",
-    },
 ]
+
+# Kesinlikle paylaşılmayacak SEO tıklama tuzağı, reklam/advertorial ve magazin kalıpları
+BLOCKED_TITLE_PATTERNS = {
+    "deprem mi oldu", "az önce deprem", "son depremler", "nerede oldu",
+    "ne zaman, hangi ayda", "ne zaman başlıyor", "kaç gün kaldı",
+    "advertorial", "sponsorlu", "ilan:", "dap yapı", "kendi kendini ödeyen",
+    "sayısal loto", "şans topu", "süper loto", "on numara", "burç yorumları",
+    "fragman", "son bölüm izle",
+}
 
 # X'te yüksek etkileşim (RT, yorum, alıntı) alan gündem anahtar kelimeleri
 HIGH_ENGAGEMENT_KEYWORDS = {
