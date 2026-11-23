@@ -12,6 +12,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from config import (
+    BLOCKED_TITLE_PATTERNS,
     GOOGLE_TRENDS_TR_RSS,
     HIGH_ENGAGEMENT_KEYWORDS,
     HTTP_TIMEOUT,
@@ -242,12 +243,12 @@ def fetch_trending_news(
             if not title or not link:
                 continue
 
-            # Google News başlıklarında " - Kaynak Adı" kısmını ayır
+            # SEO tıklama tuzağı / reklam / advertorial başlıklarını tamamen ele
+            lower_title = _tr_lower(title)
+            if any(pat in lower_title for pat in BLOCKED_TITLE_PATTERNS):
+                continue
+
             source_name = name
-            if name == "Google News TR" and " - " in title:
-                parts = title.rsplit(" - ", 1)
-                if len(parts[0]) > 15:
-                    title, source_name = parts[0].strip(), parts[1].strip()
 
             summary = _clean_html(getattr(entry, "summary", ""))
             image_url, video_url = _extract_rss_media(entry)
@@ -336,7 +337,7 @@ def enrich_news_item(item: NewsItem) -> NewsItem:
     for tag in image_meta_candidates:
         if tag and tag.get("content"):
             cand = urljoin(item.url, tag["content"].strip())
-            if cand.startswith("http"):
+            if cand.startswith("http") and "googleusercontent.com" not in cand and "news.google.com" not in cand:
                 item.image_url = cand
                 break
 
