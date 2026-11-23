@@ -46,7 +46,17 @@ def _enforce_length(text: str, max_chars: int) -> str:
         cleaned = _strip_urls(cleaned)
     if len(cleaned) <= max_chars:
         return cleaned
-    return cleaned[: max_chars - 1].rstrip() + "…"
+
+    # Kelime veya #hashtag ortasından bölmeden en yakın boşluktan temiz kes
+    cut = cleaned[: max_chars - 1]
+    if " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    cut = cut.rstrip(" ,;:-")
+    # Sonda yarım veya tek başına kalmış # işaretini temizle
+    cut = re.sub(r"\s+#\S*$", "", cut).rstrip(" ,;:-")
+    if not cut.endswith((".", "!", "?", "…")):
+        cut += "…"
+    return cut
 
 
 def compose_tweet(item: NewsItem) -> str:
