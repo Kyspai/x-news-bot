@@ -51,7 +51,7 @@ class PostedNewsStore:
     def get_last_category(self) -> str | None:
         return self.last_categories[-1] if self.last_categories else None
 
-    def is_duplicate(self, url: str, title: str, similarity_threshold: float = 0.55) -> bool:
+    def is_duplicate(self, url: str, title: str, similarity_threshold: float = 0.35) -> bool:
         norm_url = normalize_url(url)
         if norm_url in self.posted_urls:
             return True
@@ -60,6 +60,7 @@ class PostedNewsStore:
         if not new_tokens:
             return False
 
+        # Son 150 başlıkta Jaccard benzerliği kontrolü
         for old_title in self.posted_titles[-150:]:
             old_tokens = tokenize_title(old_title)
             if not old_tokens:
@@ -67,6 +68,12 @@ class PostedNewsStore:
             intersection = new_tokens & old_tokens
             union = new_tokens | old_tokens
             if union and (len(intersection) / len(union)) >= similarity_threshold:
+                return True
+
+        # Son 15 başlıkta en az 3 ortak anlamlı kelime varsa aynı gündem konusunu tekrar etme
+        for recent_title in self.posted_titles[-15:]:
+            recent_tokens = tokenize_title(recent_title)
+            if len(new_tokens & recent_tokens) >= 3:
                 return True
         return False
 
