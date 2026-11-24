@@ -1,5 +1,6 @@
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 from google import genai
 
@@ -26,13 +27,31 @@ Format ve Kurallar:
 
 
 def _fallback_tweet(item: NewsItem, max_chars: int) -> str:
-    prefix = "📰 "
-    suffix = f" ({item.source}) #Gündem"
-    available = max_chars - len(prefix) - len(suffix)
+    """Gemini API kota/429 hatası verirse temiz ve okunaklı yedek format üretir."""
+    emoji_map = {
+        "ekonomi": "📊",
+        "spor": "⚽",
+        "teknoloji": "🤖",
+        "gundem": "🚨",
+    }
+    tag_map = {
+        "ekonomi": "#Ekonomi #Gündem",
+        "spor": "#Spor #Gündem",
+        "teknoloji": "#Teknoloji #Gündem",
+        "gundem": "#SonDakika #Gündem",
+    }
+    emoji = emoji_map.get(item.category, "🚨")
+    tags = tag_map.get(item.category, "#SonDakika #Gündem")
     title = item.title.strip()
-    if len(title) > available:
-        title = title[: available - 1].rstrip() + "…"
-    return f"{prefix}{title}{suffix}"
+    summary = item.summary.strip()
+
+    if summary and summary.lower() != title.lower() and len(summary) > 30:
+        candidate = f"{emoji} {title}\n\n{summary}\n\n{tags}"
+        if len(candidate) <= max_chars:
+            return candidate
+
+    candidate = f"{emoji} {title}\n\n{tags}"
+    return _enforce_length(candidate, max_chars)
 
 
 def _strip_urls(text: str) -> str:
@@ -69,26 +88,40 @@ def compose_tweet(item: NewsItem) -> str:
 
     body = ""
     if GEMINI_API_KEY:
-        try:
-            client = genai.Client(api_key=GEMINI_API_KEY)
-            prompt = (
-                f"Kaynak: {item.source}\n"
-                f"Başlık: {item.title}\n"
-                f"Özet: {item.summary}\n"
-                f"Detay: {item.article_text[:900]}\n\n"
-                f"Yukarıdaki haberi en fazla {max_body - 10} karakter olacak şekilde "
-                f"tek bir X gönderisi olarak yaz. URL veya alan adı ekleme."
-            )
-            interaction = client.interactions.create(
-                model=GEMINI_MODEL,
-                system_instruction=SYSTEM_INSTRUCTION,
-                input=prompt,
-                store=False,
-            )
-            if interaction.output_text:
-                body = _enforce_length(interaction.output_text, max_body)
-        except Exception as exc:
-            logger.warning("Gemini API hatası, şablona geçiliyor: %s", exc)
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        prompt = (
+            f"Kaynak: {item.source}\n"
+            f"Başlık: {item.title}\n"
+            f"Özet: {item.summary}\n"
+            f"Detay: {item.article_text[:900]}\n\n"
+            f"Yukarıdaki haberi en fazla {max_body - 10} karakter olacak şekilde "
+            f"tek bir X gönderisi olarak yaz. URL veya alan adı ekleme."
+        )
+        # Birincil model 429/503 verirse kesin süre sınırı (25sn) ile yedek modele veya şablona geç
+        candidate_models = list(
+            dict.fromkeys([GEMINI_MODEL, "gemini-4-hydrogen", "gemini-3.1-flash-lite"])
+        )
+        for model_name in candidate_models:
+            pool = ThreadPoolExecutor(max_workers=1)
+            try:
+                future = pool.submit(
+                    client.interactions.create,
+                    model=model_name,
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    input=prompt,
+                    store=False,
+                    timeout=20.0,
+                )
+                interaction = future.result(timeout=25)
+                if interaction.output_text:
+                    body = _enforce_length(interaction.output_text, max_body)
+                    break
+            except FuturesTimeoutError:
+                logger.warning("Gemini model zaman aşımı (%s, >25sn), sıradakine geçiliyor.", model_name)
+            except Exception as exc:
+                logger.warning("Gemini model hatası (%s), sıradakine geçiliyor: %s", model_name, exc)
+            finally:
+                pool.shutdown(wait=False, cancel_futures=True)
     else:
         logger.info("GEMINI_API_KEY tanımlı değil, standart haber şablonu kullanılıyor.")
 
