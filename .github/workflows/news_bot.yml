@@ -61,14 +61,15 @@ jobs:
           BRAND_NAME: "HABER EXE"
         run: python main.py
 
-      - name: Paylaşılan haber geçmişini kaydet
+      - name: Paylaşılan haber geçmişini ve sağlık raporunu kaydet
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/posted_news.json
+          git add data/posted_news.json data/health_report.md 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "Değişiklik yok, commit atlanıyor."
           else
-            git commit -m "chore: paylaşılan haber geçmişini güncelle [skip ci]"
+            git commit -m "chore: haber geçmişini ve sağlık raporunu güncelle [skip ci]"
             git push
           fi
