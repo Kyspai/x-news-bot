@@ -1,6 +1,6 @@
 import logging
 import re
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+import threading
 
 from google import genai
 
@@ -97,31 +97,40 @@ def compose_tweet(item: NewsItem) -> str:
             f"Yukarıdaki haberi en fazla {max_body - 10} karakter olacak şekilde "
             f"tek bir X gönderisi olarak yaz. URL veya alan adı ekleme."
         )
-        # Birincil model 429/503 verirse kesin süre sınırı (25sn) ile yedek modele veya şablona geç
+        # Birincil model 429/503 verirse daemon thread ile kesin 20sn sınırında yedek modele veya şablona geç
         candidate_models = list(
             dict.fromkeys([GEMINI_MODEL, "gemini-4-hydrogen", "gemini-3.1-flash-lite"])
         )
         for model_name in candidate_models:
-            pool = ThreadPoolExecutor(max_workers=1)
-            try:
-                future = pool.submit(
-                    client.interactions.create,
-                    model=model_name,
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    input=prompt,
-                    store=False,
-                    timeout=20.0,
-                )
-                interaction = future.result(timeout=25)
-                if interaction.output_text:
-                    body = _enforce_length(interaction.output_text, max_body)
-                    break
-            except FuturesTimeoutError:
-                logger.warning("Gemini model zaman aşımı (%s, >25sn), sıradakine geçiliyor.", model_name)
-            except Exception as exc:
-                logger.warning("Gemini model hatası (%s), sıradakine geçiliyor: %s", model_name, exc)
-            finally:
-                pool.shutdown(wait=False, cancel_futures=True)
+            result_box: dict[str, object] = {}
+
+            def _call_model(m_name: str = model_name, box: dict[str, object] = result_box) -> None:
+                try:
+                    box["resp"] = client.interactions.create(
+                        model=m_name,
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        input=prompt,
+                        store=False,
+                        timeout=15.0,
+                    )
+                except Exception as exc:
+                    box["err"] = exc
+
+            worker = threading.Thread(target=_call_model, daemon=True)
+            worker.start()
+            worker.join(timeout=20.0)
+
+            if worker.is_alive():
+                logger.warning("Gemini model zaman aşımı (%s, >20sn), sıradakine geçiliyor.", model_name)
+                continue
+            if "err" in result_box:
+                logger.warning("Gemini model hatası (%s), sıradakine geçiliyor: %s", model_name, result_box["err"])
+                continue
+
+            interaction = result_box.get("resp")
+            if interaction and getattr(interaction, "output_text", None):
+                body = _enforce_length(interaction.output_text, max_body)
+                break
     else:
         logger.info("GEMINI_API_KEY tanımlı değil, standart haber şablonu kullanılıyor.")
 
