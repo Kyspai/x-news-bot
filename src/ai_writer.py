@@ -9,21 +9,28 @@ from src.news_fetcher import NewsItem
 
 logger = logging.getLogger(__name__)
 
-# X her URL'yi 23 karakter (t.co) olarak sayar; güvenlik payıyla 240 karakter hedefleyelim.
-MAX_BODY_CHARS_WITH_LINK = 240
-MAX_BODY_CHARS_NO_LINK = 270
+# X her URL'yi 23 karakter, her emojiyi 2 karakter sayar; güvenli tavanlar:
+MAX_BODY_CHARS_WITH_LINK = 238
+MAX_BODY_CHARS_NO_LINK = 272
 
-SYSTEM_INSTRUCTION = """Sen Türkiye'nin en yüksek etkileşim alan, güvenilir ve hızlı dijital haber sayfası (HABER.EXE) için yazan kıdemli bir X (Twitter) editörüsün.
-Verilen haberi, sadece yazı (fotoğrafsız) olarak X akışında yüksek okunma, yorum ve retweet alacak net, boşluklu ve tarafsız tek bir gönderiye dönüştüreceksin.
+CATEGORY_DEFAULT_TAGS = {
+    "ekonomi": ["#Ekonomi", "#Gündem"],
+    "spor": ["#Spor", "#Gündem"],
+    "teknoloji": ["#Teknoloji", "#Gündem"],
+    "gundem": ["#SonDakika", "#Gündem"],
+}
 
-Format ve Kurallar:
-1. İlk satır: Tek başına vurucu, kısa bir manşet olsun ve konuya uygun tek bir emoji ile başlasın (ör. 🚨 ..., 📊 ..., ⚡ ..., ⚽ ..., 🤖 ...).
-2. Bir boş satır bırak, ardından 1-2 cümlelik net ve somut özet yaz (haber metnindeki rakam, oran, tarih veya kritik kararı mutlaka öne çıkar; asla bilgi uydurma).
-3. Haber tartışmaya açık bir konuysa (ekonomi, zam, karar, düzenleme, spor, teknoloji vb.), bir boş satır daha bırakıp sonuna bot gibi durmayan çok kısa, doğal ve tarafsız bir soru ekle (ör. "Sizce bu karar nasıl etkiler?"). Trajik/hassas haberlerde (ölüm, deprem, kaza vb.) ASLA soru ekleme.
-4. Sona en fazla 1-2 adet ilgili ve ölçülü hashtag ekle (ör. #SonDakika #Ekonomi #Gündem).
+SYSTEM_INSTRUCTION = """Sen Türkiye'nin en yüksek etkileşim alan dijital haber sayfası (HABER.EXE) için yazan kıdemli bir X (Twitter) editörüsün.
+Verilen haberi X akışında yüksek okunma ve etkileşim alacak kısa, boşluklu ve tarafsız tek bir gönderiye dönüştüreceksin.
+
+Kesin Kurallar:
+1. İlk satır: Tek başına vurucu, çok kısa bir manşet olsun ve konuya uygun tek bir emoji ile başlasın (ör. 🚨 ..., 📊 ..., ⚡ ..., ⚽ ..., 🤖 ...).
+2. Bir boş satır bırak, ardından TEK cümlelik net ve somut bir özet yaz (rakam, oran veya kritik kararı mutlaka öne çıkar; asla bilgi uydurma).
+3. Haber tartışmaya açık bir konuysa (ekonomi, zam, karar, spor, teknoloji vb.), bir boş satır daha bırakıp en fazla 5-7 kelimelik çok kısa ve doğal bir soru ekle (ör. "Sizce bu karar piyasayı nasıl etkiler?"). Trajik/hassas haberlerde (ölüm, deprem, kaza vb.) ASLA soru ekleme.
+4. En sona MUTLAKA 2 adet kısa ve konuya uygun hashtag yaz (ör. #Galatasaray #ŞampiyonlarLigi veya #Ekonomi #Gündem).
 5. URL, link veya alan adı kesinlikle yazma.
 6. Çıktı SADECE tweet metni olsun; tırnak işareti, açıklama veya alternatif seçenek ekleme.
-7. Toplam uzunluk kesinlikle 235 karakteri geçmesin."""
+7. Toplam uzunluk (hashtagler ve boş satırlar dahil) kesinlikle 205 karakteri geçmesin ki hiçbir cümle veya soru yarım kalmasın."""
 
 
 def _fallback_tweet(item: NewsItem, max_chars: int) -> str:
@@ -34,24 +41,16 @@ def _fallback_tweet(item: NewsItem, max_chars: int) -> str:
         "teknoloji": "🤖",
         "gundem": "🚨",
     }
-    tag_map = {
-        "ekonomi": "#Ekonomi #Gündem",
-        "spor": "#Spor #Gündem",
-        "teknoloji": "#Teknoloji #Gündem",
-        "gundem": "#SonDakika #Gündem",
-    }
     emoji = emoji_map.get(item.category, "🚨")
-    tags = tag_map.get(item.category, "#SonDakika #Gündem")
+    tags = " ".join(CATEGORY_DEFAULT_TAGS.get(item.category, ["#SonDakika", "#Gündem"]))
     title = item.title.strip()
     summary = item.summary.strip()
 
     if summary and summary.lower() != title.lower() and len(summary) > 30:
         candidate = f"{emoji} {title}\n\n{summary}\n\n{tags}"
-        if len(candidate) <= max_chars:
-            return candidate
-
-    candidate = f"{emoji} {title}\n\n{tags}"
-    return _enforce_length(candidate, max_chars)
+    else:
+        candidate = f"{emoji} {title}\n\n{tags}"
+    return _enforce_length(candidate, max_chars, category=item.category)
 
 
 def _strip_urls(text: str) -> str:
@@ -59,28 +58,109 @@ def _strip_urls(text: str) -> str:
     return re.sub(r"https?://\S+|www\.\S+", "", text).strip()
 
 
-def _enforce_length(text: str, max_chars: int) -> str:
+def _extract_hashtags(text: str, category: str) -> tuple[str, list[str]]:
+    """Metindeki hashtagleri ayırır; eksikse kategoriye göre varsayılan 2 hashtag ekler."""
+    raw_tags = re.findall(r"#[A-Za-z0-9_çğıöşüÇĞİÖŞÜ]+", text)
+    seen: set[str] = set()
+    chosen: list[str] = []
+    for tag in raw_tags:
+        key = tag.replace("İ", "i").replace("I", "ı").lower()
+        if key not in seen and 2 < len(tag) <= 24:
+            seen.add(key)
+            chosen.append(tag)
+        if len(chosen) == 2:
+            break
+
+    # Metin gövdesindeki satır sonu / sonda kalan hashtagleri temizle
+    body_without_tags = re.sub(r"(?:^|\s)#[A-Za-z0-9_çğıöşüÇĞİÖŞÜ]+", "", text)
+    lines = [re.sub(r"[ \t]{2,}", " ", line).strip() for line in body_without_tags.splitlines()]
+    cleaned_body = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+    if not chosen:
+        chosen = list(CATEGORY_DEFAULT_TAGS.get(category, ["#SonDakika", "#Gündem"]))
+
+    return cleaned_body, chosen
+
+
+def _trim_to_complete_sentences(paragraph: str, budget: int) -> str:
+    """Paragrafı asla cümle/soru ortasından bölmeden bütçeye sığan tam cümlelerle kırpar."""
+    if len(paragraph) <= budget:
+        return paragraph
+
+    sentences = re.split(r"(?<=[.!?])\s+", paragraph.strip())
+    kept: list[str] = []
+    for sentence in sentences:
+        candidate = " ".join(kept + [sentence])
+        if len(candidate) <= budget:
+            kept.append(sentence)
+        else:
+            break
+
+    if kept:
+        return " ".join(kept)
+
+    # Tek cümle bile bütçeyi aşıyorsa kelime sınırından temiz kes
+    cut = paragraph[: max(10, budget - 1)]
+    if " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(" ,;:-") + "…"
+
+
+def _enforce_length(text: str, max_chars: int, category: str = "gundem") -> str:
+    """
+    Metni X karakter sınırına göre düzenler:
+    - URL'leri temizler (INCLUDE_SOURCE_LINK=False ise)
+    - 1-2 hashtag'in her zaman tam ve kesilmeden kalmasını garanti eder
+    - Sığmayan soru/paragrafı ortadan kesmek yerine tamamen çıkarır; cümle yarım kalmaz
+    """
     cleaned = re.sub(r"\n{3,}", "\n\n", text.strip()).strip('"\'')
     if not INCLUDE_SOURCE_LINK:
         cleaned = _strip_urls(cleaned)
-    if len(cleaned) <= max_chars:
-        return cleaned
 
-    # Kelime veya #hashtag ortasından bölmeden en yakın boşluktan temiz kes
-    cut = cleaned[: max_chars - 1]
-    if " " in cut:
-        cut = cut.rsplit(" ", 1)[0]
-    cut = cut.rstrip(" ,;:-")
-    # Sonda yarım veya tek başına kalmış # işaretini temizle
-    cut = re.sub(r"\s+#\S*$", "", cut).rstrip(" ,;:-")
-    if not cut.endswith((".", "!", "?", "…")):
-        cut += "…"
-    return cut
+    body_text, tags = _extract_hashtags(cleaned, category)
+    tag_block = "\n\n" + " ".join(tags)
+
+    # Eğer tek hashtag bile çok uzunsa 1 etikete düş
+    if len(tag_block) > max_chars // 3 and len(tags) > 1:
+        tags = tags[:1]
+        tag_block = "\n\n" + tags[0]
+
+    budget = max_chars - len(tag_block)
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", body_text) if p.strip()]
+
+    if not paragraphs:
+        return " ".join(tags)
+
+    # 1) Tüm paragraflar bütçeye sığıyorsa dokunma
+    joined = "\n\n".join(paragraphs)
+    if len(joined) <= budget:
+        return f"{joined}{tag_block}"
+
+    # 2) 3+ paragraf varsa (Manşet + Özet + Soru), soru yarım kalmasın diye önce son paragrafı çıkar
+    while len(paragraphs) > 2 and len("\n\n".join(paragraphs)) > budget:
+        paragraphs.pop()
+
+    joined = "\n\n".join(paragraphs)
+    if len(joined) <= budget:
+        return f"{joined}{tag_block}"
+
+    # 3) 2 paragraf (Manşet + Özet) hâlâ sığmıyorsa özeti tam cümle sınırından kısalt
+    if len(paragraphs) == 2:
+        headline, summary = paragraphs[0], paragraphs[1]
+        summary_budget = budget - len(headline) - 2
+        if summary_budget >= 45:
+            trimmed_summary = _trim_to_complete_sentences(summary, summary_budget)
+            return f"{headline}\n\n{trimmed_summary}{tag_block}"
+        paragraphs = [headline]
+
+    # 4) Sadece manşet kaldıysa temiz sığdır
+    final_headline = _trim_to_complete_sentences(paragraphs[0], budget)
+    return f"{final_headline}{tag_block}"
 
 
 def compose_tweet(item: NewsItem) -> str:
     """Gemini API ile haber metnini X formatına dönüştürür; API yoksa şablon kullanır."""
-    source_footer = f"\n\n— {item.source}"
+    source_footer = f"\n— {item.source}"
     if INCLUDE_SOURCE_LINK:
         max_body = MAX_BODY_CHARS_WITH_LINK
     else:
@@ -89,13 +169,15 @@ def compose_tweet(item: NewsItem) -> str:
     body = ""
     if GEMINI_API_KEY:
         client = genai.Client(api_key=GEMINI_API_KEY)
+        target_chars = min(205, max_body - 20)
         prompt = (
+            f"Kategori: {item.category}\n"
             f"Kaynak: {item.source}\n"
             f"Başlık: {item.title}\n"
             f"Özet: {item.summary}\n"
             f"Detay: {item.article_text[:900]}\n\n"
-            f"Yukarıdaki haberi en fazla {max_body - 10} karakter olacak şekilde "
-            f"tek bir X gönderisi olarak yaz. URL veya alan adı ekleme."
+            f"Yukarıdaki haberi, 2 kısa hashtag dahil TOPLAM en fazla {target_chars} karakter "
+            f"olacak şekilde tek bir X gönderisi olarak yaz. URL veya alan adı ekleme."
         )
         # Birincil model 429/503 verirse daemon thread ile kesin 20sn sınırında yedek modele veya şablona geç
         candidate_models = list(
@@ -129,7 +211,7 @@ def compose_tweet(item: NewsItem) -> str:
 
             interaction = result_box.get("resp")
             if interaction and getattr(interaction, "output_text", None):
-                body = _enforce_length(interaction.output_text, max_body)
+                body = _enforce_length(interaction.output_text, max_body, category=item.category)
                 break
     else:
         logger.info("GEMINI_API_KEY tanımlı değil, standart haber şablonu kullanılıyor.")
