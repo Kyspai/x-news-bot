@@ -1,10 +1,13 @@
 import logging
+import os
 import shutil
 import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import tweepy
 
-from config import DRY_RUN, INCLUDE_MEDIA, MAX_POSTS_PER_RUN, TMP_MEDIA_DIR
+from config import DATA_DIR, DRY_RUN, INCLUDE_MEDIA, MAX_POSTS_PER_RUN, TMP_MEDIA_DIR
 from src.ai_writer import compose_tweet
 from src.media_handler import prepare_media
 from src.news_fetcher import enrich_news_item, fetch_trending_news
@@ -17,6 +20,44 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("x-news-bot")
+
+HEALTH_REPORT_FILE = DATA_DIR / "health_report.md"
+
+
+def _append_health_report(status: str, detail: str, tweet_url: str = "-") -> None:
+    """Son 30 koşunun durum özetini data/health_report.md ve GitHub Step Summary'ye yazar."""
+    tr_now = datetime.now(timezone.utc) + timedelta(hours=3)
+    ts = tr_now.strftime("%d.%m.%Y %H:%M TR")
+    safe_detail = detail.replace("|", "-").replace("\n", " ")[:110]
+    link_md = f"[Tweet]({tweet_url})" if tweet_url.startswith("http") else tweet_url
+    new_row = f"| {ts} | {status} | {safe_detail} | {link_md} |"
+
+    header = [
+        "# HaberExe Otomasyon Sağlık Raporu",
+        "",
+        "| Tarih (TR) | Durum | Haber / Detay | Link |",
+        "|---|---|---|---|",
+    ]
+    existing_rows: list[str] = []
+    if HEALTH_REPORT_FILE.exists():
+        for line in HEALTH_REPORT_FILE.read_text(encoding="utf-8").splitlines():
+            if line.startswith("| ") and not line.startswith("| Tarih") and not line.startswith("|---"):
+                existing_rows.append(line)
+
+    rows = [new_row] + existing_rows[:29]
+    HEALTH_REPORT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    HEALTH_REPORT_FILE.write_text("\n".join(header + rows) + "\n", encoding="utf-8")
+
+    summary_path = os.getenv("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        try:
+            with Path(summary_path).open("a", encoding="utf-8") as f:
+                f.write(f"### HaberExe Koşu Raporu ({ts})\n\n")
+                f.write(f"- **Durum:** {status}\n")
+                f.write(f"- **Detay:** {safe_detail}\n")
+                f.write(f"- **Link:** {link_md}\n")
+        except OSError:
+            pass
 
 
 def run() -> int:
@@ -67,15 +108,19 @@ def run() -> int:
             tweet_text = compose_tweet(enriched)
             media = prepare_media(enriched) if INCLUDE_MEDIA else None
 
-            publisher.publish(tweet_text, media=media)
+            tweet_id = publisher.publish(tweet_text, media=media)
 
             if not DRY_RUN:
                 store.mark_posted(enriched.url, enriched.title, category=enriched.category)
                 store.save()
+                tweet_url = f"https://x.com/i/web/status/{tweet_id}" if tweet_id else "-"
+                _append_health_report("✅ Yayınlandı", f"[{enriched.category}] {enriched.title}", tweet_url)
 
             posted_count += 1
         except tweepy.TweepyException as exc:
             logger.error("X API hatası nedeniyle çalışma durduruluyor: %s", exc)
+            if not DRY_RUN:
+                _append_health_report("❌ X API Hatası", str(exc))
             if TMP_MEDIA_DIR.exists():
                 shutil.rmtree(TMP_MEDIA_DIR, ignore_errors=True)
             return 1
