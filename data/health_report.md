@@ -2,6 +2,7 @@
 
 | Tarih (TR) | Durum | Haber / Detay | Link |
 |---|---|---|---|
+| 25.11.2026 21:43 TR | ✅ Yayınlandı | [spor] Shakhtar Donetsk Fenerbahçe maçı TRT 1'de | [Tweet](https://x.com/i/web/status/2125661758941540727) |
 | 25.11.2026 19:57 TR | ✅ Yayınlandı | [gundem] HSK'nin mazeret kararnamesiyle 957 hakim ve savcının görev yeri değişti | [Tweet](https://x.com/i/web/status/2125635095541264556) |
 | 25.11.2026 17:55 TR | ✅ Yayınlandı | [ekonomi] Altın fiyatlarında son durum | [Tweet](https://x.com/i/web/status/2125604218719391999) |
 | 25.11.2026 16:03 TR | ✅ Yayınlandı | [gundem] Şile Belediyesi davası - Haluk Levent: Yeliz Kaya yerine benim tutuklanmam gerekiyor | [Tweet](https://x.com/i/web/status/2125576226085679303) |
