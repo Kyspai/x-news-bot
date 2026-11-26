@@ -2,6 +2,7 @@
 
 | Tarih (TR) | Durum | Haber / Detay | Link |
 |---|---|---|---|
+| 26.11.2026 23:46 TR | ✅ Yayınlandı | [gundem] TCMB'den Türk lirası likidite yönetimi ve zorunlu karşılıklara ilişkin yeni adımlar | [Tweet](https://x.com/i/web/status/2126054986182283418) |
 | 26.11.2026 21:47 TR | ✅ Yayınlandı | [gundem] Cumhurbaşkanı Erdoğan'dan Kurra Hafız Ali Kemal Hut için taziye mesajı | [Tweet](https://x.com/i/web/status/2126025093075583087) |
 | 26.11.2026 19:58 TR | ✅ Yayınlandı | [gundem] Borsa günü yükselişle tamamladı | [Tweet](https://x.com/i/web/status/2125997513304072221) |
 | 26.11.2026 17:52 TR | ✅ Yayınlandı | [ekonomi] Altın günü düşüşle kapattı | [Tweet](https://x.com/i/web/status/2125965805724856743) |
