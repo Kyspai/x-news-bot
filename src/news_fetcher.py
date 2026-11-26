@@ -110,6 +110,35 @@ def _tr_lower(text: str) -> str:
     return text.replace("İ", "i").replace("I", "ı").lower()
 
 
+_CATEGORY_SIGNALS = {
+    "ekonomi": (
+        "tcmb", "merkez bankası", "borsa", "bist", "altın", "dolar", "euro",
+        "faiz", "enflasyon", "zorunlu karşılık", "rezerv", "kredi", "vergi",
+        "asgari ücret", "emekli maaş", "bitcoin", "kripto", "piyasa", "cari açık",
+    ),
+    "spor": (
+        "fenerbahçe", "galatasaray", "beşiktaş", "trabzonspor", "süper lig",
+        "şampiyonlar ligi", "uefa", "milli takım", "derbi", "transfer",
+        "basketbol", "voleybol", "maçı", "maçta",
+    ),
+    "teknoloji": (
+        "yapay zeka", "openai", "apple", "iphone", "google", "tesla",
+        "instagram", "whatsapp", "tiktok", "gta", "hacker", "siber", "uzay", "nasa",
+    ),
+}
+
+
+def _infer_category(title: str, default_category: str) -> str:
+    """Genel gündem akışından gelen ekonomi/spor/teknoloji haberlerini doğru kategorize eder."""
+    if default_category != "gundem":
+        return default_category
+    lower = _tr_lower(title)
+    for cat, keywords in _CATEGORY_SIGNALS.items():
+        if any(kw in lower for kw in keywords):
+            return cat
+    return default_category
+
+
 def _fetch_serious_trends() -> list[str]:
     """
     Google Trends Türkiye RSS'inden anlık aranan konuları çeker;
@@ -258,7 +287,7 @@ def fetch_trending_news(
                     title=title,
                     url=link,
                     source=source_name,
-                    category=category,
+                    category=_infer_category(title, category),
                     summary=summary,
                     published_at=_parse_date(entry),
                     image_url=image_url,
