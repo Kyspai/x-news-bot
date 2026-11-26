@@ -1,4 +1,5 @@
 import html
+import json
 import logging
 import re
 from dataclasses import dataclass, field
@@ -36,6 +37,7 @@ class NewsItem:
     summary: str = ""
     published_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     image_url: Optional[str] = None
+    image_candidates: list[str] = field(default_factory=list)
     video_url: Optional[str] = None
     article_text: str = ""
     engagement_score: float = 0.0
@@ -357,7 +359,47 @@ def enrich_news_item(item: NewsItem) -> NewsItem:
                 item.video_url = urljoin(item.url, src.strip())
                 break
 
-    # 2. Yüksek çözünürlüklü görsel arama (og:image her zaman RSS thumbnail'dan daha iyidir)
+    # 2. Yüksek çözünürlüklü görsel adaylarını topla (JSON-LD -> og:image -> twitter:image -> srcset -> RSS)
+    candidates: list[str] = []
+
+    def _add_candidate(raw_url: str) -> None:
+        if not raw_url:
+            return
+        cand = urljoin(item.url, raw_url.strip())
+        low = cand.lower()
+        if not low.startswith("http"):
+            return
+        if any(bad in low for bad in ("googleusercontent.com", "news.google.com", "logo", "favicon", ".svg", "avatar")):
+            return
+        if cand not in candidates:
+            candidates.append(cand)
+
+    # 2a. JSON-LD (genellikle en yüksek çözünürlüklü 1200px+ orijinal fotoğraf buradadır)
+    for script in soup.find_all("script", type="application/ld+json"):
+        raw_ld = script.string or script.get_text() or ""
+        if not raw_ld.strip():
+            continue
+        try:
+            parsed_ld = json.loads(raw_ld)
+        except Exception:
+            continue
+        nodes = parsed_ld if isinstance(parsed_ld, list) else [parsed_ld]
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            img_field = node.get("image")
+            if isinstance(img_field, str):
+                _add_candidate(img_field)
+            elif isinstance(img_field, dict) and img_field.get("url"):
+                _add_candidate(str(img_field["url"]))
+            elif isinstance(img_field, list):
+                for entry in img_field:
+                    if isinstance(entry, str):
+                        _add_candidate(entry)
+                    elif isinstance(entry, dict) and entry.get("url"):
+                        _add_candidate(str(entry["url"]))
+
+    # 2b. Meta etiketleri (og:image / twitter:image)
     image_meta_candidates = [
         soup.find("meta", property="og:image:secure_url"),
         soup.find("meta", property="og:image"),
@@ -365,10 +407,34 @@ def enrich_news_item(item: NewsItem) -> NewsItem:
     ]
     for tag in image_meta_candidates:
         if tag and tag.get("content"):
-            cand = urljoin(item.url, tag["content"].strip())
-            if cand.startswith("http") and "googleusercontent.com" not in cand and "news.google.com" not in cand:
-                item.image_url = cand
-                break
+            _add_candidate(tag["content"])
+
+    # 2c. Makale içindeki srcset'ten en geniş görseli al
+    for source_el in soup.find_all(["source", "img"], srcset=True)[:6]:
+        srcset = source_el.get("srcset") or ""
+        best_url = ""
+        best_w = 0
+        for part in srcset.split(","):
+            tokens = part.strip().split()
+            if not tokens:
+                continue
+            u = tokens[0]
+            w = 0
+            if len(tokens) > 1 and tokens[1].endswith("w") and tokens[1][:-1].isdigit():
+                w = int(tokens[1][:-1])
+            if w >= best_w:
+                best_w = w
+                best_url = u
+        if best_url and best_w >= 800:
+            _add_candidate(best_url)
+
+    # 2d. RSS'ten gelen görseli en son yedek olarak ekle
+    if item.image_url:
+        _add_candidate(item.image_url)
+
+    item.image_candidates = candidates
+    if candidates:
+        item.image_url = candidates[0]
 
     # 3. Haber metni çıkarımı (AI daha doğru özet yazsın diye ilk birkaç paragraf)
     paragraphs = []
