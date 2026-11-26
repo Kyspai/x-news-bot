@@ -2,6 +2,7 @@
 
 | Tarih (TR) | Durum | Haber / Detay | Link |
 |---|---|---|---|
+| 26.11.2026 17:52 TR | ✅ Yayınlandı | [ekonomi] Altın günü düşüşle kapattı | [Tweet](https://x.com/i/web/status/2125965805724856743) |
 | 26.11.2026 16:02 TR | ✅ Yayınlandı | [gundem] Merkez Bankası rezervleri 142 milyar dolar oldu | [Tweet](https://x.com/i/web/status/2125938312766734677) |
 | 26.11.2026 13:52 TR | ✅ Yayınlandı | [ekonomi] Altın düşüşünü sürdürüyor: İşte fiyatlar... | [Tweet](https://x.com/i/web/status/2125905535031521660) |
 | 26.11.2026 11:55 TR | ✅ Yayınlandı | [gundem] Türkiye'nin güneş enerjisi kurulu gücünün yüzde 10'u Konya'da | [Tweet](https://x.com/i/web/status/2125876114891457021) |
