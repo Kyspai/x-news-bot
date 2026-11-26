@@ -2,6 +2,7 @@
 
 | Tarih (TR) | Durum | Haber / Detay | Link |
 |---|---|---|---|
+| 26.11.2026 21:47 TR | ✅ Yayınlandı | [gundem] Cumhurbaşkanı Erdoğan'dan Kurra Hafız Ali Kemal Hut için taziye mesajı | [Tweet](https://x.com/i/web/status/2126025093075583087) |
 | 26.11.2026 19:58 TR | ✅ Yayınlandı | [gundem] Borsa günü yükselişle tamamladı | [Tweet](https://x.com/i/web/status/2125997513304072221) |
 | 26.11.2026 17:52 TR | ✅ Yayınlandı | [ekonomi] Altın günü düşüşle kapattı | [Tweet](https://x.com/i/web/status/2125965805724856743) |
 | 26.11.2026 16:02 TR | ✅ Yayınlandı | [gundem] Merkez Bankası rezervleri 142 milyar dolar oldu | [Tweet](https://x.com/i/web/status/2125938312766734677) |
