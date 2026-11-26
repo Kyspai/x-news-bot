@@ -33,8 +33,19 @@ Kesin Kurallar:
 7. Toplam uzunluk (hashtagler ve boş satırlar dahil) kesinlikle 205 karakteri geçmesin ki hiçbir cümle veya soru yarım kalmasın."""
 
 
+def _extract_first_short_sentence(text: str, max_len: int) -> str:
+    """Metinden max_len içine tam sığan ilk tam cümleyi çıkarır; yoksa boş döner."""
+    if not text:
+        return ""
+    for sentence in re.split(r"(?<=[.!?])\s+", text.strip()):
+        s = sentence.strip()
+        if 25 <= len(s) <= max_len and s.endswith((".", "!", "?")):
+            return s
+    return ""
+
+
 def _fallback_tweet(item: NewsItem, max_chars: int) -> str:
-    """Gemini API kota/429 hatası verirse temiz ve okunaklı yedek format üretir."""
+    """Gemini API kota/429 hatası verirse ASLA cümle kesmeden temiz yedek format üretir."""
     emoji_map = {
         "ekonomi": "📊",
         "spor": "⚽",
@@ -44,12 +55,23 @@ def _fallback_tweet(item: NewsItem, max_chars: int) -> str:
     emoji = emoji_map.get(item.category, "🚨")
     tags = " ".join(CATEGORY_DEFAULT_TAGS.get(item.category, ["#SonDakika", "#Gündem"]))
     title = item.title.strip()
-    summary = item.summary.strip()
+    headline = f"{emoji} {title}"
+    tag_block = f"\n\n{tags}"
+    summary_budget = max_chars - len(headline) - len(tag_block) - 2
 
-    if summary and summary.lower() != title.lower() and len(summary) > 30:
-        candidate = f"{emoji} {title}\n\n{summary}\n\n{tags}"
+    # Sadece bütçeye TAM sığan bir cümle varsa özet ekle; yoksa yarım kesmek yerine sadece manşet + etiket at
+    short_summary = ""
+    if summary_budget >= 45:
+        for source_text in (item.summary, item.article_text):
+            cand = _extract_first_short_sentence(source_text, summary_budget)
+            if cand and cand.lower() != title.lower():
+                short_summary = cand
+                break
+
+    if short_summary:
+        candidate = f"{headline}\n\n{short_summary}{tag_block}"
     else:
-        candidate = f"{emoji} {title}\n\n{tags}"
+        candidate = f"{headline}{tag_block}"
     return _enforce_length(candidate, max_chars, category=item.category)
 
 
@@ -82,7 +104,7 @@ def _extract_hashtags(text: str, category: str) -> tuple[str, list[str]]:
     return cleaned_body, chosen
 
 
-def _trim_to_complete_sentences(paragraph: str, budget: int) -> str:
+def _trim_to_complete_sentences(paragraph: str, budget: int, allow_word_cut: bool = False) -> str:
     """Paragrafı asla cümle/soru ortasından bölmeden bütçeye sığan tam cümlelerle kırpar."""
     if len(paragraph) <= budget:
         return paragraph
@@ -99,7 +121,10 @@ def _trim_to_complete_sentences(paragraph: str, budget: int) -> str:
     if kept:
         return " ".join(kept)
 
-    # Tek cümle bile bütçeyi aşıyorsa kelime sınırından temiz kes
+    if not allow_word_cut:
+        return ""
+
+    # Yalnızca son çare (manşetin tek başına bile sığmaması) durumunda kelime sınırından kes
     cut = paragraph[: max(10, budget - 1)]
     if " " in cut:
         cut = cut.rsplit(" ", 1)[0]
@@ -144,17 +169,18 @@ def _enforce_length(text: str, max_chars: int, category: str = "gundem") -> str:
     if len(joined) <= budget:
         return f"{joined}{tag_block}"
 
-    # 3) 2 paragraf (Manşet + Özet) hâlâ sığmıyorsa özeti tam cümle sınırından kısalt
+    # 3) 2 paragraf (Manşet + Özet) hâlâ sığmıyorsa özeti SADECE tam cümle sınırından kısalt; sığmıyorsa yarım bırakma
     if len(paragraphs) == 2:
         headline, summary = paragraphs[0], paragraphs[1]
         summary_budget = budget - len(headline) - 2
         if summary_budget >= 45:
-            trimmed_summary = _trim_to_complete_sentences(summary, summary_budget)
-            return f"{headline}\n\n{trimmed_summary}{tag_block}"
+            trimmed_summary = _trim_to_complete_sentences(summary, summary_budget, allow_word_cut=False)
+            if trimmed_summary:
+                return f"{headline}\n\n{trimmed_summary}{tag_block}"
         paragraphs = [headline]
 
     # 4) Sadece manşet kaldıysa temiz sığdır
-    final_headline = _trim_to_complete_sentences(paragraphs[0], budget)
+    final_headline = _trim_to_complete_sentences(paragraphs[0], budget, allow_word_cut=True)
     return f"{final_headline}{tag_block}"
 
 
@@ -179,9 +205,9 @@ def compose_tweet(item: NewsItem) -> str:
             f"Yukarıdaki haberi, 2 kısa hashtag dahil TOPLAM en fazla {target_chars} karakter "
             f"olacak şekilde tek bir X gönderisi olarak yaz. URL veya alan adı ekleme."
         )
-        # Birincil model 429/503 verirse daemon thread ile kesin 20sn sınırında yedek modele veya şablona geç
+        # Birincil model 429/503 verirse 4 farklı model havuzundan sırayla dene (her biri max 20sn)
         candidate_models = list(
-            dict.fromkeys([GEMINI_MODEL, "gemini-4-hydrogen", "gemini-3.1-flash-lite"])
+            dict.fromkeys([GEMINI_MODEL, "gemini-3.5-flash-lite", "gemini-4-hydrogen", "gemma-4-31b-it"])
         )
         for model_name in candidate_models:
             result_box: dict[str, object] = {}
