@@ -2,6 +2,7 @@
 
 | Tarih (TR) | Durum | Haber / Detay | Link |
 |---|---|---|---|
+| 26.11.2026 10:00 TR | ✅ Yayınlandı | [ekonomi] Küresel piyasalar sert dalgalanmalarla karışık seyrediyor | [Tweet](https://x.com/i/web/status/2125847189951746339) |
 | 25.11.2026 23:47 TR | ✅ Yayınlandı | [gundem] İstanbul'a ne zaman kar yağacak? AKOM en kuvvetli ihtimali paylaştı | [Tweet](https://x.com/i/web/status/2125692840340832463) |
 | 25.11.2026 21:43 TR | ✅ Yayınlandı | [spor] Shakhtar Donetsk Fenerbahçe maçı TRT 1'de | [Tweet](https://x.com/i/web/status/2125661758941540727) |
 | 25.11.2026 19:57 TR | ✅ Yayınlandı | [gundem] HSK'nin mazeret kararnamesiyle 957 hakim ve savcının görev yeri değişti | [Tweet](https://x.com/i/web/status/2125635095541264556) |
