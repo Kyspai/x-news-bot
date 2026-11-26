@@ -2,6 +2,7 @@
 
 | Tarih (TR) | Durum | Haber / Detay | Link |
 |---|---|---|---|
+| 26.11.2026 13:52 TR | ✅ Yayınlandı | [ekonomi] Altın düşüşünü sürdürüyor: İşte fiyatlar... | [Tweet](https://x.com/i/web/status/2125905535031521660) |
 | 26.11.2026 11:55 TR | ✅ Yayınlandı | [gundem] Türkiye'nin güneş enerjisi kurulu gücünün yüzde 10'u Konya'da | [Tweet](https://x.com/i/web/status/2125876114891457021) |
 | 26.11.2026 10:00 TR | ✅ Yayınlandı | [ekonomi] Küresel piyasalar sert dalgalanmalarla karışık seyrediyor | [Tweet](https://x.com/i/web/status/2125847189951746339) |
 | 25.11.2026 23:47 TR | ✅ Yayınlandı | [gundem] İstanbul'a ne zaman kar yağacak? AKOM en kuvvetli ihtimali paylaştı | [Tweet](https://x.com/i/web/status/2125692840340832463) |
