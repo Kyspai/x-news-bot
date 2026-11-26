@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 import requests
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from config import (
     BRAND_NAME,
@@ -110,7 +110,10 @@ def _apply_news_overlay(img: Image.Image, item: NewsItem) -> Image.Image:
     - Alt kısma vurucu beyaz manşet ve kaynak imzası yazar
     """
     width, height = 1200, 800
-    base = ImageOps.fit(img, (width, height), method=Image.Resampling.LANCZOS).convert("RGBA")
+    base_rgb = ImageOps.fit(img, (width, height), method=Image.Resampling.LANCZOS)
+    # Hafif keskinleştirme: X sıkıştırmasına karşı netlik korur
+    base_rgb = base_rgb.filter(ImageFilter.UnsharpMask(radius=1.1, percent=85, threshold=3))
+    base = base_rgb.convert("RGBA")
 
     # Alt yarıya yumuşak siyah-lacivert gradyan
     overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
@@ -180,38 +183,67 @@ def _apply_news_overlay(img: Image.Image, item: NewsItem) -> Image.Image:
     return composed.convert("RGB")
 
 
-def _download_and_normalize_image(url: str, output_dir: Path, item: NewsItem) -> Optional[Path]:
+MIN_HD_WIDTH = 720
+MIN_HD_HEIGHT = 400
+
+
+def _fetch_pil_image(url: str) -> Optional[Image.Image]:
     headers = {"User-Agent": USER_AGENT}
     try:
         resp = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT)
         resp.raise_for_status()
         if len(resp.content) > MAX_IMAGE_BYTES * 3:
             return None
-
         img = Image.open(io.BytesIO(resp.content))
-        width, height = img.size
-        # Çok küçük ikon / piksel görselleri ele
-        if width < 300 or height < 200:
-            logger.info("Görsel çok küçük (%dx%d), atlanıyor.", width, height)
-            return None
-
-        if img.mode in ("RGBA", "LA", "P"):
-            bg = Image.new("RGB", img.size, (18, 22, 32))
-            if img.mode == "P":
-                img = img.convert("RGBA")
-            bg.paste(img, mask=img.split()[-1] if "A" in img.mode else None)
-            img = bg
-        elif img.mode != "RGB":
-            img = img.convert("RGB")
-
-        branded = _apply_news_overlay(img, item)
-
-        target = output_dir / f"image_{uuid.uuid4().hex[:8]}.jpg"
-        branded.save(target, format="JPEG", quality=92, optimize=True)
-        return target
+        img.load()
+        return img
     except Exception as exc:
-        logger.warning("Görsel indirilemedi (%s): %s", url, exc)
+        logger.debug("Görsel adayı indirilemedi (%s): %s", url, exc)
         return None
+
+
+def _download_best_image(urls: list[str], output_dir: Path, item: NewsItem) -> Optional[Path]:
+    """
+    Aday görseller arasından piksellenme olmaması için en az 720x400 çözünürlükte
+    en yüksek kaliteli fotoğrafı seçer; HD (>=1000px) bulduğunda hemen kullanır.
+    """
+    best_img: Optional[Image.Image] = None
+    best_pixels = 0
+
+    for url in urls[:6]:
+        img = _fetch_pil_image(url)
+        if img is None:
+            continue
+        w, h = img.size
+        if w < MIN_HD_WIDTH or h < MIN_HD_HEIGHT:
+            logger.info("Düşük çözünürlüklü görsel elendi (%dx%d < %dx%d): %s", w, h, MIN_HD_WIDTH, MIN_HD_HEIGHT, url)
+            continue
+
+        pixels = w * h
+        if pixels > best_pixels:
+            best_img = img
+            best_pixels = pixels
+        if w >= 1000 and h >= 550:
+            logger.info("Yüksek çözünürlüklü (HD) görsel seçildi (%dx%d)", w, h)
+            break
+
+    if best_img is None:
+        return None
+
+    if best_img.mode in ("RGBA", "LA", "P"):
+        bg = Image.new("RGB", best_img.size, (18, 22, 32))
+        if best_img.mode == "P":
+            best_img = best_img.convert("RGBA")
+        bg.paste(best_img, mask=best_img.split()[-1] if "A" in best_img.mode else None)
+        best_img = bg
+    elif best_img.mode != "RGB":
+        best_img = best_img.convert("RGB")
+
+    branded = _apply_news_overlay(best_img, item)
+    target = output_dir / f"image_{uuid.uuid4().hex[:8]}.jpg"
+    # subsampling=0 (4:4:4) kırmızı rozet ve beyaz metin çevresindeki JPEG piksellenmesini engeller
+    branded.save(target, format="JPEG", quality=95, subsampling=0, optimize=True)
+    return target
 
 
 def generate_news_card(item: NewsItem, output_dir: Path) -> Path:
@@ -276,10 +308,14 @@ def prepare_media(item: NewsItem) -> PreparedMedia:
             logger.info("Orijinal video indirildi: %s", video_path.name)
             return PreparedMedia(path=video_path, media_type="video")
 
-    if item.image_url:
-        image_path = _download_and_normalize_image(item.image_url, TMP_MEDIA_DIR, item)
+    candidate_urls = list(item.image_candidates) if item.image_candidates else []
+    if item.image_url and item.image_url not in candidate_urls:
+        candidate_urls.append(item.image_url)
+
+    if candidate_urls:
+        image_path = _download_best_image(candidate_urls, TMP_MEDIA_DIR, item)
         if image_path:
-            logger.info("Manşetli haber görseli hazırlandı: %s", image_path.name)
+            logger.info("HD manşetli haber görseli hazırlandı: %s", image_path.name)
             return PreparedMedia(path=image_path, media_type="image")
 
     card_path = generate_news_card(item, TMP_MEDIA_DIR)
