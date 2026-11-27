@@ -78,17 +78,21 @@ class XPublisher:
         media_ids = None
 
         if media and media.path.exists():
-            if media.media_type == "video":
-                uploaded = self._api_v1.media_upload(
-                    filename=str(media.path),
-                    media_category="tweet_video",
-                    chunked=True,
-                    wait_for_async_finalize=True,
-                )
-            else:
-                uploaded = self._api_v1.media_upload(filename=str(media.path))
-            media_ids = [uploaded.media_id_string]
-            logger.info("Medya X'e yüklendi (media_id=%s)", uploaded.media_id_string)
+            try:
+                if media.media_type == "video":
+                    uploaded = self._api_v1.media_upload(
+                        filename=str(media.path),
+                        media_category="tweet_video",
+                        chunked=True,
+                        wait_for_async_finalize=True,
+                    )
+                else:
+                    uploaded = self._api_v1.media_upload(filename=str(media.path))
+                media_ids = [uploaded.media_id_string]
+                logger.info("Medya X'e yüklendi (media_id=%s)", uploaded.media_id_string)
+            except Exception as exc:
+                logger.warning("Medya yüklenemedi, gönderi sadece metinle devam ediyor: %s", exc)
+                media_ids = None
 
         response = self._client_v2.create_tweet(text=text, media_ids=media_ids)
         tweet_id = str(response.data["id"])
