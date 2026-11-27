@@ -90,5 +90,6 @@ jobs:
             echo "Değişiklik yok, commit atlanıyor."
           else
             git commit -m "chore: haber geçmişini ve sağlık raporunu güncelle [skip ci]"
+            git pull --rebase --autostash origin main || true
             git push
           fi
