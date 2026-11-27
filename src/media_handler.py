@@ -257,49 +257,66 @@ def _download_best_image(urls: list[str], output_dir: Path, item: NewsItem) -> O
 
 
 def generate_news_card(item: NewsItem, output_dir: Path) -> Path:
-    """Görseli/videosu olmayan haberler için 1200x675 modern haber kartı üretir."""
-    width, height = 1200, 675
-    img = Image.new("RGB", (width, height), (12, 18, 32))
+    """HD fotoğrafı olmayan haberler için kategori renk kodlu 1200x800 modern haber kartı üretir."""
+    width, height = 1200, 800
+    img = Image.new("RGBA", (width, height), (8, 12, 22, 255))
     draw = ImageDraw.Draw(img)
 
-    # Yumuşak dikey arka plan gradyanı
+    cat_text = CATEGORY_LABELS.get(item.category, "GÜNDEM")
+    cat_color = CATEGORY_COLORS.get(item.category, (230, 57, 70, 245))
+
+    # Koyu stüdyo gradyanı
     for y in range(height):
-        r = int(12 + (22 - 12) * (y / height))
-        g = int(18 + (32 - 18) * (y / height))
-        b = int(32 + (56 - 32) * (y / height))
-        draw.line([(0, y), (width, y)], fill=(r, g, b))
+        t = y / float(height)
+        r = int(8 + 10 * t)
+        g = int(12 + 12 * t)
+        b = int(22 + 22 * t)
+        draw.line([(0, y), (width, y)], fill=(r, g, b, 255))
 
-    # Sol kenar vurgu şeridi (kırmızı-turuncu gündem çizgisi)
-    draw.rectangle([(0, 0), (18, height)], fill=(230, 57, 70))
+    # Sağ üstte kategori renginde hafif ambiyans parıltısı
+    glow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    gdraw = ImageDraw.Draw(glow)
+    for rad in range(420, 30, -15):
+        alpha = int(18 * (1.0 - rad / 420.0))
+        gdraw.ellipse([(1020 - rad, 140 - rad), (1020 + rad, 140 + rad)], fill=(cat_color[0], cat_color[1], cat_color[2], alpha))
+    img = Image.alpha_composite(img, glow)
+    draw = ImageDraw.Draw(img)
 
-    # Üst rozet ("GÜNDEM")
+    # Sol kenar kategori renginde vurgu şeridi
+    draw.rectangle([(0, 0), (14, height)], fill=cat_color)
+
     badge_font = _load_font(24, bold=True)
-    brand_font = _load_font(26, bold=True)
-    title_font = _load_font(50, bold=True)
+    cat_font = _load_font(22, bold=True)
+    title_font = _load_font(52, bold=True)
     footer_font = _load_font(24, bold=False)
 
-    draw.rounded_rectangle([(72, 64), (242, 114)], radius=8, fill=(230, 57, 70))
-    draw.text((100, 75), "GÜNDEM", font=badge_font, fill=(255, 255, 255))
-    draw.text((264, 74), BRAND_NAME.upper(), font=brand_font, fill=(180, 196, 220))
+    # Üst rozetler
+    draw.rounded_rectangle([(68, 58), (270, 106)], radius=8, fill=(230, 57, 70, 255))
+    draw.ellipse([(84, 75), (98, 89)], fill=(255, 255, 255, 255))
+    draw.text((110, 68), BRAND_NAME.upper()[:11], font=badge_font, fill=(255, 255, 255, 255))
 
-    # Ayırıcı çizgi
-    draw.line([(72, 146), (width - 72, 146)], fill=(48, 66, 98), width=2)
+    cat_box_w = max(148, len(cat_text) * 16 + 44)
+    draw.rounded_rectangle([(284, 58), (284 + cat_box_w, 106)], radius=8, fill=cat_color)
+    draw.text((304, 70), cat_text, font=cat_font, fill=(255, 255, 255, 255))
 
-    # Başlığı satırlara böl
-    wrapped = textwrap.wrap(item.title, width=34)[:5]
-    y_cursor = 190
+    draw.line([(68, 146), (width - 68, 146)], fill=(44, 60, 92, 200), width=2)
+
+    # Manşet (dikey ortalanmış, max 4 satır)
+    wrapped = textwrap.wrap(item.title.strip(), width=33)[:4]
+    line_h = 68
+    block_h = len(wrapped) * line_h
+    y_cursor = 180 + max(0, (440 - block_h) // 2)
     for line in wrapped:
-        draw.text((72, y_cursor), line, font=title_font, fill=(248, 250, 252))
-        y_cursor += 68
+        draw.text((68, y_cursor), line, font=title_font, fill=(248, 250, 252, 255))
+        y_cursor += line_h
 
-    # Alt bilgi: Kaynak + Tarih
+    # Alt bilgi
     date_str = item.published_at.astimezone(timezone.utc).strftime("%d.%m.%Y")
-    footer_text = f"Kaynak: {item.source}   •   {date_str}"
-    draw.line([(72, height - 108), (width - 72, height - 108)], fill=(48, 66, 98), width=2)
-    draw.text((72, height - 80), footer_text, font=footer_font, fill=(160, 178, 204))
+    draw.line([(68, height - 104), (width - 68, height - 104)], fill=(44, 60, 92, 200), width=2)
+    draw.text((68, height - 74), f"Kaynak: {item.source}  •  {date_str}  •  @HaberExe", font=footer_font, fill=(166, 184, 212, 240))
 
     target = output_dir / f"card_{uuid.uuid4().hex[:8]}.jpg"
-    img.save(target, format="JPEG", quality=92, optimize=True)
+    img.convert("RGB").save(target, format="JPEG", quality=95, subsampling=0, optimize=True)
     return target
 
 
