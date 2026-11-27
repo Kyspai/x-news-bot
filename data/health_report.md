@@ -2,6 +2,7 @@
 
 | Tarih (TR) | Durum | Haber / Detay | Link |
 |---|---|---|---|
+| 27.11.2026 21:46 TR | ✅ Yayınlandı | [spor] PFDK'den 4 Süper Lig kulübüne para cezası | [Tweet](https://x.com/i/web/status/2126387090774511970) |
 | 27.11.2026 19:57 TR | ✅ Yayınlandı | [ekonomi] Yanıltıcı reklam yapan firmaya 1 milyon lirayı aşan ceza | [Tweet](https://x.com/i/web/status/2126359699268268226) |
 | 27.11.2026 17:45 TR | ✅ Yayınlandı | [gundem] Gürcistan'ın Ankara Büyükelçisi Kalandia, Dışişleri Bakanlığına çağrıldı | [Tweet](https://x.com/i/web/status/2126326605450543255) |
 | 27.11.2026 15:58 TR | ✅ Yayınlandı | [ekonomi] Merkez Bankası Finansal İstikrar Raporu yayımlandı | [Tweet](https://x.com/i/web/status/2126299692153872498) |
