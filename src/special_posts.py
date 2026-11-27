@@ -346,13 +346,13 @@ def _generate_digest_card(headlines: list[str], date_label: str) -> Path:
     # Sol alt özet rozeti + hesap imzası
     shown = headlines[:5]
     draw.rounded_rectangle(
-        [(48, 560), (288, 602)],
+        [(48, 560), (324, 602)],
         radius=10,
         fill=(18, 26, 42, 230),
         outline=(44, 62, 96, 220),
         width=1,
     )
-    draw.text((68, 570), f"{len(shown)} ÖNE ÇIKAN GELİŞME", font=meta_font, fill=(226, 232, 240, 255))
+    draw.text((66, 570), f"{len(shown)} ÖNE ÇIKAN GELİŞME", font=meta_font, fill=(226, 232, 240, 255))
 
     draw.text((48, height - 92), "Günü tek karede yakala", font=meta_font, fill=(140, 158, 186, 230))
     draw.text((48, height - 62), "@HaberExe", font=badge_font, fill=(248, 250, 252, 255))
@@ -408,8 +408,8 @@ def _generate_digest_card(headlines: list[str], date_label: str) -> Path:
         )
         draw.text((card_x0 + 36, badge_y0 + 10), f"0{idx}", font=num_font, fill=(255, 255, 255, 255))
 
-        # Başlığı 2 satıra sar ve dikey ortala
-        wrapped = textwrap.wrap(title.strip(), width=43)[:2]
+        # Başlığı 2 satıra sar ve dikey ortala (sağda rahat nefes payı bırak)
+        wrapped = textwrap.wrap(title.strip(), width=38)[:2]
         line_h = 34
         text_block_h = len(wrapped) * line_h
         ty = y0 + (card_h - text_block_h) // 2 - 2
