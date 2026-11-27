@@ -7,15 +7,25 @@
 import logging
 import re
 import textwrap
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
 import requests
+from google import genai
 from PIL import Image, ImageDraw
 
-from config import BRAND_NAME, DATA_DIR, HTTP_TIMEOUT, TMP_MEDIA_DIR, USER_AGENT
+from config import (
+    BRAND_NAME,
+    DATA_DIR,
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    HTTP_TIMEOUT,
+    TMP_MEDIA_DIR,
+    USER_AGENT,
+)
 from src.media_handler import PreparedMedia, _load_font
 
 logger = logging.getLogger(__name__)
@@ -286,7 +296,7 @@ def _generate_digest_card(headlines: list[str], date_label: str) -> Path:
     date_font = _load_font(26, bold=False)
     heading_font = _load_font(46, bold=True)
     num_font = _load_font(26, bold=True)
-    item_font = _load_font(29, bold=True)
+    item_font = _load_font(26, bold=True)
     footer_font = _load_font(22, bold=False)
 
     # Üst rozetler
@@ -303,7 +313,7 @@ def _generate_digest_card(headlines: list[str], date_label: str) -> Path:
     draw.text((56, 112), "Bugün Öne Çıkan Başlıklar", font=heading_font, fill=(248, 250, 252))
     draw.line([(56, 178), (width - 56, 178)], fill=(44, 62, 98), width=2)
 
-    # 1..5 Maddeler
+    # 1..5 Maddeler (tam cümle, üç noktasız)
     y_cursor = 204
     row_step = 100
     for idx, title in enumerate(headlines[:5], start=1):
@@ -311,14 +321,11 @@ def _generate_digest_card(headlines: list[str], date_label: str) -> Path:
         draw.ellipse([(56, y_cursor + 4), (104, y_cursor + 52)], fill=(230, 57, 70))
         draw.text((73, y_cursor + 12), str(idx), font=num_font, fill=(255, 255, 255))
 
-        wrapped = textwrap.wrap(title.strip(), width=54)[:2]
-        if len(wrapped) == 2 and len(title.strip()) > sum(len(x) for x in wrapped) + 4:
-            wrapped[-1] = wrapped[-1].rstrip(".,;:") + "…"
-
-        text_y = y_cursor + (12 if len(wrapped) == 1 else 0)
+        wrapped = textwrap.wrap(title.strip(), width=62)[:2]
+        text_y = y_cursor + (14 if len(wrapped) == 1 else 2)
         for line in wrapped:
             draw.text((126, text_y), line, font=item_font, fill=(242, 246, 252))
-            text_y += 38
+            text_y += 34
 
         if idx < len(headlines[:5]):
             draw.line([(126, y_cursor + 84), (width - 56, y_cursor + 84)], fill=(30, 44, 72), width=1)
@@ -338,18 +345,69 @@ def _generate_digest_card(headlines: list[str], date_label: str) -> Path:
     return target
 
 
-def _short_bullet(title: str, max_len: int = 44) -> str:
-    clean = title.strip()
-    if len(clean) <= max_len:
-        return clean
-    cut = clean[: max_len - 1]
-    if " " in cut:
-        cut = cut.rsplit(" ", 1)[0]
-    return cut.rstrip(" ,;:-") + "…"
+def _condense_headlines_with_ai(headlines: list[str], max_chars_each: int = 44) -> list[str]:
+    """
+    Başlıkları üç nokta (...) ile kesmek yerine Gemini ile her birini
+    eksiksiz, anlamlı ve kısa (en fazla ~42 karakter) tek satırlık manşetlere dönüştürür.
+    """
+    if not GEMINI_API_KEY:
+        return []
+
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    numbered = "\n".join(f"{i}. {h}" for i, h in enumerate(headlines[:5], start=1))
+    prompt = (
+        f"Aşağıdaki {len(headlines[:5])} haber başlığının her birini, anlamını eksiksiz koruyarak "
+        f"en fazla {max_chars_each - 4} karakterlik çok kısa ve tam bir Türkçe özet cümlesine çevir.\n"
+        "Kurallar:\n"
+        "- Her satır TAM ve anlamlı bir ifade olsun; ASLA '...' veya yarım cümle bırakma.\n"
+        "- Sadece maddeleri her satırda bir tane olacak şekilde, başında numara veya tire olmadan yaz.\n"
+        "- Bilgi uydurma.\n\n"
+        f"{numbered}"
+    )
+
+    candidate_models = list(
+        dict.fromkeys([GEMINI_MODEL, "gemini-3.5-flash-lite", "gemini-4-hydrogen", "gemma-4-31b-it"])
+    )
+    for model_name in candidate_models:
+        result_box: dict[str, object] = {}
+
+        def _call(m_name: str = model_name, box: dict[str, object] = result_box) -> None:
+            try:
+                box["resp"] = client.interactions.create(
+                    model=m_name,
+                    input=prompt,
+                    store=False,
+                    timeout=15.0,
+                )
+            except Exception as exc:
+                box["err"] = exc
+
+        worker = threading.Thread(target=_call, daemon=True)
+        worker.start()
+        worker.join(timeout=20.0)
+
+        if worker.is_alive() or "err" in result_box:
+            continue
+
+        resp = result_box.get("resp")
+        text = getattr(resp, "output_text", None) or ""
+        if not text.strip():
+            continue
+
+        parsed: list[str] = []
+        for raw_line in text.strip().splitlines():
+            line = re.sub(r"^[\s\d\.\-\•\*]+", "", raw_line).strip().strip('"\'')
+            line = line.rstrip("….")
+            if 10 <= len(line) <= max_chars_each:
+                parsed.append(line)
+        if len(parsed) >= 3:
+            return parsed[:5]
+
+    return []
 
 
 def build_daily_digest_post(fallback_titles: list[str]) -> Optional[tuple[str, PreparedMedia]]:
-    """Akşam Günün Özeti gönderisini (maddeli tweet + HD özet kartı) hazırlar."""
+    """Akşam Günün Özeti gönderisini (üç noktasız tam maddeler + HD özet kartı) hazırlar."""
     headlines = _collect_todays_headlines(fallback_titles)
     if len(headlines) < 3:
         logger.warning("Günün özeti için yeterli başlık yok (%d), normal habere geçiliyor.", len(headlines))
@@ -358,17 +416,26 @@ def build_daily_digest_post(fallback_titles: list[str]) -> Optional[tuple[str, P
     date_label = _tr_date_label()
     short_date = f"{_tr_now().day} {TR_MONTHS[_tr_now().month]}"
 
+    # Gemini ile her başlığı üç noktasız, tam ve kısa özet satırına dönüştür
+    short_headlines = _condense_headlines_with_ai(headlines, max_chars_each=46)
+    card_headlines = short_headlines if len(short_headlines) >= 4 else headlines
+
     header = f"🌙 GÜNÜN ÖZETİ | {short_date}\n\n"
-    footer = "\n\nGünün en önemli gelişmesi sizce hangisiydi?\n\n#GününÖzeti #SonDakika\n— HABER.EXE"
+    footer = "\n\nGünün en önemli gelişmesi hangisiydi?\n\n#GününÖzeti #SonDakika\n— HABER.EXE"
     budget = 272 - len(header) - len(footer)
 
+    # Sadece TAM sığan maddeleri ekle (ASLA '...' ile yarım bırakma)
+    source_for_tweet = short_headlines if short_headlines else sorted(headlines, key=len)
     bullets: list[str] = []
-    for h in headlines[:4]:
-        item_line = f"• {_short_bullet(h, max_len=42)}"
+    for h in source_for_tweet[:4]:
+        item_line = f"• {h.strip()}"
         candidate = "\n".join(bullets + [item_line])
         if len(candidate) <= budget:
             bullets.append(item_line)
 
+    if not bullets:
+        bullets.append(f"• {headlines[0].strip()[:budget - 2]}")
+
     tweet_text = f"{header}" + "\n".join(bullets) + footer
-    card_path = _generate_digest_card(headlines, date_label)
+    card_path = _generate_digest_card(card_headlines, date_label)
     return tweet_text, PreparedMedia(path=card_path, media_type="image", is_generated_card=True)
