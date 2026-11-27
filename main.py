@@ -61,11 +61,24 @@ def _append_health_report(status: str, detail: str, tweet_url: str = "-") -> Non
             pass
 
 
+def _already_posted_special_today(mode: str) -> bool:
+    """Aynı gün içinde Piyasa Açılışı veya Günün Özeti'nin ikinci kez atılmasını engeller."""
+    if not HEALTH_REPORT_FILE.exists():
+        return False
+    tr_now = datetime.now(timezone.utc) + timedelta(hours=3)
+    today_prefix = tr_now.strftime("%d.%m.%Y")
+    tag = "[piyasa]" if mode == "market" else "[ozet]"
+    for line in HEALTH_REPORT_FILE.read_text(encoding="utf-8").splitlines():
+        if line.startswith(f"| {today_prefix}") and "Yayınlandı" in line and tag in line:
+            return True
+    return False
+
+
 def _resolve_post_mode() -> str:
     """
     POST_MODE='auto' iken TR saatine göre otomatik mod seçer:
-    - Hafta içi 08:30 - 10:30 TR -> 'market' (Sabah Piyasa Açılışı)
-    - Her gün 22:30 - 00:30 TR -> 'digest' (Akşam Günün Özeti)
+    - Hafta içi 08:30 - 10:30 TR -> 'market' (Sabah Piyasa Açılışı, günde max 1 kez)
+    - Her gün 22:30 - 00:30 TR -> 'digest' (Akşam Günün Özeti, günde max 1 kez)
     - Diğer tüm saatler -> 'news' (Normal yüksek etkileşimli haber)
     """
     explicit = os.getenv("POST_MODE", "auto").strip().lower()
@@ -77,9 +90,9 @@ def _resolve_post_mode() -> str:
     is_weekday = tr_now.weekday() < 5
 
     if is_weekday and (8 * 60 + 30) <= minutes_of_day <= (10 * 60 + 30):
-        return "market"
+        return "news" if _already_posted_special_today("market") else "market"
     if minutes_of_day >= (22 * 60 + 30) or minutes_of_day <= 30:
-        return "digest"
+        return "news" if _already_posted_special_today("digest") else "digest"
     return "news"
 
 
