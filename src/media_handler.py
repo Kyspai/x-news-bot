@@ -100,6 +100,13 @@ CATEGORY_LABELS = {
     "teknoloji": "TEKNOLOJİ",
 }
 
+CATEGORY_COLORS = {
+    "gundem": (230, 57, 70, 245),     # Kırmızı
+    "ekonomi": (16, 185, 129, 245),   # Zümrüt Yeşili
+    "spor": (249, 115, 22, 245),      # Canlı Turuncu
+    "teknoloji": (59, 130, 246, 245), # Elektrik Mavi
+}
+
 
 def _apply_news_overlay(img: Image.Image, item: NewsItem) -> Image.Image:
     """
@@ -141,13 +148,16 @@ def _apply_news_overlay(img: Image.Image, item: NewsItem) -> Image.Image:
     # Sol üst HABER.EXE rozeti
     brand_text = BRAND_NAME.upper()
     cat_text = CATEGORY_LABELS.get(item.category, "GÜNDEM")
+    cat_color = CATEGORY_COLORS.get(item.category, (230, 57, 70, 245))
+
     draw.rounded_rectangle([(40, 34), (242, 82)], radius=8, fill=(230, 57, 70, 245))
     draw.ellipse([(56, 51), (70, 65)], fill=(255, 255, 255, 255))
     draw.text((82, 44), brand_text[:11], font=badge_font, fill=(255, 255, 255, 255))
 
-    # Yanında koyu yarı saydam kategori etiketi
-    draw.rounded_rectangle([(254, 34), (420, 82)], radius=8, fill=(14, 20, 34, 210))
-    draw.text((274, 46), cat_text, font=cat_font, fill=(226, 232, 240, 255))
+    # Yanında kategoriye özel renk kodlu rozet
+    cat_box_w = max(148, len(cat_text) * 16 + 44)
+    draw.rounded_rectangle([(254, 34), (254 + cat_box_w, 82)], radius=8, fill=cat_color)
+    draw.text((274, 46), cat_text, font=cat_font, fill=(255, 255, 255, 255))
 
     # Başlığı 2-3 satıra sar
     wrapped = textwrap.wrap(item.title.strip(), width=36)[:3]
@@ -158,11 +168,11 @@ def _apply_news_overlay(img: Image.Image, item: NewsItem) -> Image.Image:
     block_height = len(wrapped) * line_height
     y_start = height - block_height - 76
 
-    # Başlığın solunda dikey kırmızı vurgu şeridi
+    # Başlığın solunda kategori renginde dikey vurgu şeridi
     draw.rounded_rectangle(
         [(40, y_start + 4), (50, y_start + block_height - 4)],
         radius=4,
-        fill=(230, 57, 70, 255),
+        fill=cat_color,
     )
 
     # Beyaz manşet satırları (hafif gölgeli)
