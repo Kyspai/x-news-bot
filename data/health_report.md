@@ -2,6 +2,7 @@
 
 | Tarih (TR) | Durum | Haber / Detay | Link |
 |---|---|---|---|
+| 27.11.2026 13:48 TR | ✅ Yayınlandı | [ekonomi] Emlak Katılım, Katılımevim, Birevim ve İktisat Katılım Bankasını bünyesine dahil etti | [Tweet](https://x.com/i/web/status/2126266918994690523) |
 | 27.11.2026 11:55 TR | ✅ Yayınlandı | [spor] Süper Lig ve 1. Lig yayın ihalesi pazartesi günü yapılacak | [Tweet](https://x.com/i/web/status/2126238406388654586) |
 | 27.11.2026 10:01 TR | ✅ Yayınlandı | [ekonomi] Gram altın güne artışla başladı | [Tweet](https://x.com/i/web/status/2126209804444250576) |
 | 26.11.2026 23:46 TR | ✅ Yayınlandı | [gundem] TCMB'den Türk lirası likidite yönetimi ve zorunlu karşılıklara ilişkin yeni adımlar | [Tweet](https://x.com/i/web/status/2126054986182283418) |
