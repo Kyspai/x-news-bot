@@ -15,6 +15,16 @@ on:
         options:
           - "false"
           - "true"
+      post_mode:
+        description: "Paylaşım türü (auto = saate göre otomatik)"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - "auto"
+          - "news"
+          - "market"
+          - "digest"
 
 permissions:
   contents: write
@@ -55,6 +65,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: "gemini-3.1-flash-lite"
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          POST_MODE: ${{ github.event.inputs.post_mode || 'auto' }}
           MAX_POSTS_PER_RUN: "1"
           INCLUDE_SOURCE_LINK: "false"
           INCLUDE_MEDIA: "true"
