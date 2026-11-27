@@ -274,74 +274,153 @@ def _collect_todays_headlines(fallback_titles: list[str]) -> list[str]:
 
 
 def _generate_digest_card(headlines: list[str], date_label: str) -> Path:
-    """1200x800 gece lacivert temalı HABER.EXE Günün Özeti kartı üretir."""
+    """
+    1200x800 modern dergi / Bento split tasarımlı HABER.EXE Günün Özeti kartı:
+    - Sol sütun: Koyu antrasit zemin + yumuşak stüdyo parıltısı + dev tipografik tarih & GÜNÜN ÖZETİ başlığı
+    - Sağ sütun: 5 adet ayrı yuvarlatılmış koyu cam (glass) haber kartı + renkli 01..05 rozetleri
+    """
     TMP_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     width, height = 1200, 800
-    img = Image.new("RGB", (width, height), (10, 14, 28))
+    img = Image.new("RGBA", (width, height), (8, 12, 20, 255))
     draw = ImageDraw.Draw(img)
 
-    # Gece lacivert -> koyu indigo gradyan
+    # 1. Arka plan: Derin obsidian + sol üst hafif kırmızı & sağ alt hafif safir ambiyans parıltısı
     for y in range(height):
         t = y / float(height)
-        r = int(10 + (20 - 10) * t)
-        g = int(14 + (24 - 14) * t)
-        b = int(28 + (52 - 28) * t)
-        draw.line([(0, y), (width, y)], fill=(r, g, b))
+        r = int(8 + 6 * t)
+        g = int(12 + 8 * t)
+        b = int(20 + 16 * t)
+        draw.line([(0, y), (width, y)], fill=(r, g, b, 255))
 
-    # Sol kenar altın-amber vurgu şeridi
-    draw.rectangle([(0, 0), (16, height)], fill=(245, 158, 11))
+    glow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    gdraw = ImageDraw.Draw(glow)
+    # Sol üst yumuşak kırmızı stüdyo ışığı
+    for rad in range(360, 20, -12):
+        alpha = int(16 * (1.0 - rad / 360.0))
+        gdraw.ellipse([(140 - rad, 140 - rad), (140 + rad, 140 + rad)], fill=(230, 57, 70, alpha))
+    # Sağ alt yumuşak mavi-indigo ışığı
+    for rad in range(420, 20, -14):
+        alpha = int(14 * (1.0 - rad / 420.0))
+        gdraw.ellipse([(1060 - rad, 720 - rad), (1060 + rad, 720 + rad)], fill=(59, 130, 246, alpha))
+    img = Image.alpha_composite(img, glow)
+    draw = ImageDraw.Draw(img)
 
-    badge_font = _load_font(24, bold=True)
-    sub_badge_font = _load_font(22, bold=True)
-    date_font = _load_font(26, bold=False)
-    heading_font = _load_font(46, bold=True)
-    num_font = _load_font(26, bold=True)
+    # Sol sütunda çok hafif mimari nokta dokusu (dot grid)
+    for gx in range(36, 380, 26):
+        for gy in range(36, height - 36, 26):
+            draw.point((gx, gy), fill=(72, 92, 126, 75))
+
+    # Sol kenar ince vurgu çizgisi
+    draw.rectangle([(0, 0), (10, height)], fill=(230, 57, 70, 255))
+
+    # Sol & sağ sütun ayırıcı ince dikey çizgi
+    draw.line([(394, 48), (394, height - 48)], fill=(38, 52, 78, 180), width=2)
+
+    # Fontlar
+    badge_font = _load_font(22, bold=True)
+    hero_font = _load_font(66, bold=True)
+    day_font = _load_font(86, bold=True)
+    month_font = _load_font(26, bold=True)
+    meta_font = _load_font(20, bold=False)
+    num_font = _load_font(24, bold=True)
     item_font = _load_font(26, bold=True)
-    footer_font = _load_font(22, bold=False)
 
-    # Üst rozetler
-    draw.rounded_rectangle([(56, 40), (256, 88)], radius=8, fill=(230, 57, 70))
-    draw.ellipse([(72, 57), (86, 71)], fill=(255, 255, 255))
-    draw.text((98, 50), BRAND_NAME.upper()[:11], font=badge_font, fill=(255, 255, 255))
+    # --- SOL SÜTUN (Dergi Kapağı / Masthead) ---
+    draw.rounded_rectangle([(48, 54), (236, 98)], radius=8, fill=(230, 57, 70, 255))
+    draw.ellipse([(64, 70), (76, 82)], fill=(255, 255, 255, 255))
+    draw.text((88, 63), BRAND_NAME.upper()[:11], font=badge_font, fill=(255, 255, 255, 255))
 
-    draw.rounded_rectangle([(272, 40), (484, 88)], radius=8, fill=(245, 158, 11))
-    draw.text((294, 52), "GÜNÜN ÖZETİ", font=sub_badge_font, fill=(14, 18, 30))
+    draw.text((48, 146), "GÜNÜN", font=hero_font, fill=(248, 250, 252, 255))
+    draw.text((48, 218), "ÖZETİ", font=hero_font, fill=(230, 57, 70, 255))
 
-    draw.text((width - 310, 50), date_label, font=date_font, fill=(182, 196, 222))
+    # İnce vurgu çubuğu
+    draw.rounded_rectangle([(48, 308), (156, 316)], radius=4, fill=(245, 158, 11, 255))
 
-    # Başlık
-    draw.text((56, 112), "Bugün Öne Çıkan Başlıklar", font=heading_font, fill=(248, 250, 252))
-    draw.line([(56, 178), (width - 56, 178)], fill=(44, 62, 98), width=2)
+    # Büyük editoryal tarih bloğu ("28" + "KASIM 2026")
+    date_parts = date_label.split()
+    day_str = date_parts[0] if date_parts else ""
+    rest_str = " ".join(date_parts[1:]).upper() if len(date_parts) > 1 else date_label.upper()
+    draw.text((48, 356), day_str, font=day_font, fill=(255, 255, 255, 255))
+    draw.text((48, 456), rest_str, font=month_font, fill=(168, 186, 214, 255))
 
-    # 1..5 Maddeler (tam cümle, üç noktasız)
-    y_cursor = 204
-    row_step = 100
-    for idx, title in enumerate(headlines[:5], start=1):
-        # Numara dairesi
-        draw.ellipse([(56, y_cursor + 4), (104, y_cursor + 52)], fill=(230, 57, 70))
-        draw.text((73, y_cursor + 12), str(idx), font=num_font, fill=(255, 255, 255))
-
-        wrapped = textwrap.wrap(title.strip(), width=62)[:2]
-        text_y = y_cursor + (14 if len(wrapped) == 1 else 2)
-        for line in wrapped:
-            draw.text((126, text_y), line, font=item_font, fill=(242, 246, 252))
-            text_y += 34
-
-        if idx < len(headlines[:5]):
-            draw.line([(126, y_cursor + 84), (width - 56, y_cursor + 84)], fill=(30, 44, 72), width=1)
-        y_cursor += row_step
-
-    # Alt bilgi
-    draw.line([(56, height - 76), (width - 56, height - 76)], fill=(44, 62, 98), width=2)
-    draw.text(
-        (56, height - 52),
-        "Günü tek karede yakala  •  @HaberExe",
-        font=footer_font,
-        fill=(160, 178, 206),
+    # Sol alt özet rozeti + hesap imzası
+    shown = headlines[:5]
+    draw.rounded_rectangle(
+        [(48, 560), (288, 602)],
+        radius=10,
+        fill=(18, 26, 42, 230),
+        outline=(44, 62, 96, 220),
+        width=1,
     )
+    draw.text((68, 570), f"{len(shown)} ÖNE ÇIKAN GELİŞME", font=meta_font, fill=(226, 232, 240, 255))
+
+    draw.text((48, height - 92), "Günü tek karede yakala", font=meta_font, fill=(140, 158, 186, 230))
+    draw.text((48, height - 62), "@HaberExe", font=badge_font, fill=(248, 250, 252, 255))
+
+    # --- SAĞ SÜTUN (5 Ayrı Glassmorphic Bento Haber Kartı) ---
+    card_x0 = 428
+    card_x1 = width - 48
+    card_count = max(1, len(shown))
+    top_pad = 54
+    bottom_pad = 54
+    gap = 18
+    avail_h = height - top_pad - bottom_pad - gap * (card_count - 1)
+    card_h = min(132, avail_h // card_count)
+    # Kart bloğunu dikey ortala
+    total_block_h = card_count * card_h + (card_count - 1) * gap
+    y_cursor = (height - total_block_h) // 2
+
+    pill_colors = [
+        (230, 57, 70, 255),   # 01 Kırmızı
+        (16, 185, 129, 255),  # 02 Zümrüt
+        (59, 130, 246, 255),  # 03 Elektrik Mavi
+        (249, 115, 22, 255),  # 04 Turuncu
+        (245, 158, 11, 255),  # 05 Altın
+    ]
+
+    for idx, title in enumerate(shown, start=1):
+        accent = pill_colors[(idx - 1) % len(pill_colors)]
+        y0 = y_cursor
+        y1 = y0 + card_h
+
+        # Koyu cam kart yüzeyi + ince kenarlık
+        draw.rounded_rectangle(
+            [(card_x0, y0), (card_x1, y1)],
+            radius=16,
+            fill=(16, 24, 39, 238),
+            outline=(38, 54, 82, 220),
+            width=2,
+        )
+        # Kartın sol kenarında ince renkli dikey çizgi
+        draw.rounded_rectangle(
+            [(card_x0, y0 + 18), (card_x0 + 6, y1 - 18)],
+            radius=3,
+            fill=accent,
+        )
+        # Numara rozeti ("01".."05")
+        badge_y0 = y0 + (card_h - 46) // 2
+        draw.rounded_rectangle(
+            [(card_x0 + 24, badge_y0), (card_x0 + 78, badge_y0 + 46)],
+            radius=10,
+            fill=(accent[0], accent[1], accent[2], 38),
+            outline=accent,
+            width=2,
+        )
+        draw.text((card_x0 + 36, badge_y0 + 10), f"0{idx}", font=num_font, fill=(255, 255, 255, 255))
+
+        # Başlığı 2 satıra sar ve dikey ortala
+        wrapped = textwrap.wrap(title.strip(), width=43)[:2]
+        line_h = 34
+        text_block_h = len(wrapped) * line_h
+        ty = y0 + (card_h - text_block_h) // 2 - 2
+        for line in wrapped:
+            draw.text((card_x0 + 98, ty), line, font=item_font, fill=(244, 247, 252, 255))
+            ty += line_h
+
+        y_cursor += card_h + gap
 
     target = TMP_MEDIA_DIR / f"digest_{uuid.uuid4().hex[:8]}.jpg"
-    img.save(target, format="JPEG", quality=95, subsampling=0, optimize=True)
+    img.convert("RGB").save(target, format="JPEG", quality=95, subsampling=0, optimize=True)
     return target
 
 
