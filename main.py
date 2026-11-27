@@ -11,6 +11,7 @@ from config import DATA_DIR, DRY_RUN, INCLUDE_MEDIA, MAX_POSTS_PER_RUN, TMP_MEDI
 from src.ai_writer import compose_tweet
 from src.media_handler import prepare_media
 from src.news_fetcher import enrich_news_item, fetch_trending_news
+from src.special_posts import build_daily_digest_post, build_market_post
 from src.storage import PostedNewsStore
 from src.x_publisher import XPublisher
 
@@ -60,15 +61,68 @@ def _append_health_report(status: str, detail: str, tweet_url: str = "-") -> Non
             pass
 
 
+def _resolve_post_mode() -> str:
+    """
+    POST_MODE='auto' iken TR saatine göre otomatik mod seçer:
+    - Hafta içi 08:30 - 10:30 TR -> 'market' (Sabah Piyasa Açılışı)
+    - Her gün 22:30 - 00:30 TR -> 'digest' (Akşam Günün Özeti)
+    - Diğer tüm saatler -> 'news' (Normal yüksek etkileşimli haber)
+    """
+    explicit = os.getenv("POST_MODE", "auto").strip().lower()
+    if explicit in {"news", "market", "digest"}:
+        return explicit
+
+    tr_now = datetime.now(timezone.utc) + timedelta(hours=3)
+    minutes_of_day = tr_now.hour * 60 + tr_now.minute
+    is_weekday = tr_now.weekday() < 5
+
+    if is_weekday and (8 * 60 + 30) <= minutes_of_day <= (10 * 60 + 30):
+        return "market"
+    if minutes_of_day >= (22 * 60 + 30) or minutes_of_day <= 30:
+        return "digest"
+    return "news"
+
+
 def run() -> int:
+    mode = _resolve_post_mode()
     logger.info(
-        "Bot başlatıldı (DRY_RUN=%s, MAX_POSTS_PER_RUN=%d)",
+        "Bot başlatıldı (MODE=%s, DRY_RUN=%s, MAX_POSTS_PER_RUN=%d)",
+        mode,
         DRY_RUN,
         MAX_POSTS_PER_RUN,
     )
 
     store = PostedNewsStore()
     publisher = XPublisher(dry_run=DRY_RUN)
+
+    # Özel formatlar: Sabah Piyasa Açılışı veya Akşam Günün Özeti
+    if mode in {"market", "digest"}:
+        try:
+            special = (
+                build_market_post()
+                if mode == "market"
+                else build_daily_digest_post(store.posted_titles)
+            )
+            if special:
+                tweet_text, media = special
+                tweet_id = publisher.publish(tweet_text, media=media if INCLUDE_MEDIA else None)
+                if not DRY_RUN:
+                    tweet_url = f"https://x.com/i/web/status/{tweet_id}" if tweet_id else "-"
+                    label = "[piyasa] Sabah Piyasa Açılışı" if mode == "market" else "[ozet] Akşam Günün Özeti"
+                    _append_health_report("✅ Yayınlandı", label, tweet_url)
+                if TMP_MEDIA_DIR.exists():
+                    shutil.rmtree(TMP_MEDIA_DIR, ignore_errors=True)
+                logger.info("Özel format başarıyla tamamlandı (%s).", mode)
+                return 0
+        except tweepy.TweepyException as exc:
+            logger.error("X API hatası (%s): %s", mode, exc)
+            if not DRY_RUN:
+                _append_health_report("❌ X API Hatası", str(exc))
+            if TMP_MEDIA_DIR.exists():
+                shutil.rmtree(TMP_MEDIA_DIR, ignore_errors=True)
+            return 1
+        except Exception as exc:
+            logger.warning("Özel format (%s) başarısız, normal habere geçiliyor: %s", mode, exc)
 
     news_items = fetch_trending_news(
         limit_per_feed=8,
