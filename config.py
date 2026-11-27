@@ -116,7 +116,7 @@ X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN", "").strip()
 X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET", "").strip()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-4-hydrogen").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip()
 
 # Bot Ayarları
 DRY_RUN = os.getenv("DRY_RUN", "true").strip().lower() in {"1", "true", "yes", "evet"}
@@ -133,7 +133,7 @@ INCLUDE_MEDIA = os.getenv("INCLUDE_MEDIA", "true").strip().lower() in {
     "yes",
     "evet",
 }
-BRAND_NAME = os.getenv("BRAND_NAME", "GÜNDEM ÖZETİ").strip()
+BRAND_NAME = os.getenv("BRAND_NAME", "HABER EXE").strip()
 
 # Medya ve ağ limitleri
 HTTP_TIMEOUT = 15
