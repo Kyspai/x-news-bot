@@ -72,6 +72,14 @@ jobs:
           BRAND_NAME: "HABER EXE"
         run: python main.py
 
+      - name: Önizleme görselini yükle (sadece DRY_RUN)
+        if: github.event.inputs.dry_run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-preview
+          path: output_preview/
+          retention-days: 1
+
       - name: Paylaşılan haber geçmişini ve sağlık raporunu kaydet
         if: always()
         run: |
