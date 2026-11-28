@@ -2,6 +2,7 @@
 
 | Tarih (TR) | Durum | Haber / Detay | Link |
 |---|---|---|---|
+| 28.11.2026 13:44 TR | ✅ Yayınlandı | [gundem] Sarıgül soruşturmasında Özgür Özel'e fezleke | [Tweet](https://x.com/i/web/status/2126628225375731961) |
 | 28.11.2026 11:44 TR | ✅ Yayınlandı | [spor] A Milli Erkek Basketbol Takımı, İzlanda karşısında | [Tweet](https://x.com/i/web/status/2126597990043263406) |
 | 28.11.2026 09:56 TR | ✅ Yayınlandı | [ekonomi] Konaklama vergisinde yüzde 1 uygulaması uzatıldı | [Tweet](https://x.com/i/web/status/2126570840305320432) |
 | 27.11.2026 23:46 TR | ✅ Yayınlandı | [ozet] Akşam Günün Özeti | [Tweet](https://x.com/i/web/status/2126417325306028526) |
